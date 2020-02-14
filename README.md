@@ -58,8 +58,8 @@ Please note the following when using Setup to reinstall or upgrade Apache Tomcat
 `/currentuser`                    | Runs Setup in non-administrative installation mode (not recommended). See [Administrative vs. Non-administrative Installation Mode](#administrative-vs-non-administrative-installation-mode).
 `/instancename="`_name_`"`        | Runs Setup to install a separate instance of Apache Tomcat. See [Installing Separate Instances](#installing-separate-instances).
 `/dir="`_location_`"`             | Specifies the installation directory. The default location is _d_`:\Program Files\Apache Tomcat` (where _d_`:` is the Windows system partition).
-`/type=`_type_                    | Specifies the installation type. See [Setup Type and Components](##setup-type-and-components).
-`/components="`_componentlist_`"` | Specifies the components Setup should install. See [Setup Type and Components](##setup-type-and-components).
+`/type=`_type_                    | Specifies the installation type. See [Setup Type and Components](#setup-type-and-components).
+`/components="`_componentlist_`"` | Specifies the components Setup should install. See [Setup Type and Components](#setup-type-and-components).
 `/group="`_name_`"`               | Specifies the Start Menu group name. The default group name is `Apache Tomcat`.
 `/noicons`                        | Prevents creation of a Start Menu group.
 `/tasks="`_tasklist_`"`           | Specifies the tasks Setup should perform. See [Setup Tasks](#setup-tasks).
