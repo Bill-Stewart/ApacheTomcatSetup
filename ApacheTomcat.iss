@@ -27,6 +27,9 @@
 ; * First public version
 ; * Changed: Adjusted Apache Tomcat logo in left wizard image
 ; * Changed: Message file tweaks
+;
+; 1.0.0.4 (2020-03-17)
+; * Copy *.jar and *.xml to bin
 
 #include AddBackslash(SourcePath) + "includes.iss"
 
@@ -99,8 +102,9 @@ Source: "{#RootDir}\*"; DestDir: "{app}"; Excludes: "bin\*,conf\*,webapps\*"; Fl
 ; bin - Windows scripts
 Source: "{#RootDir}\bin\*.bat"; DestDir: "{app}\bin"; Flags: comparetimestamp
 ; bin - jar files
-Source: "{#RootDir}\bin\bootstrap.jar";   DestDir: "{app}\bin"; Flags: comparetimestamp
-Source: "{#RootDir}\bin\tomcat-juli.jar"; DestDir: "{app}\bin"; Flags: comparetimestamp
+Source: "{#RootDir}\bin\*.jar"; DestDir: "{app}\bin"
+; bin - xml files
+Source: "{#RootDir}\bin\*.xml"; DestDir: "{app}\bin"; Flags: comparetimestamp 
 ; bin - Windows binaries - x64
 Source: "{#RootDir}\bin\tcnative-1.dll.x64";                DestDir: "{app}\bin"; DestName: "tcnative-1.dll"; Flags: ignoreversion; Check: IsJVM64Bit
 Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}.exe.x64";  DestDir: "{app}\bin"; DestName: "tomcat.exe";     Flags: ignoreversion; Check: IsJVM64Bit
