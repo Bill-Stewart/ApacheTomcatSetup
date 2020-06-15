@@ -30,6 +30,9 @@
 ;
 ; 1.0.0.4 (2020-03-17)
 ; * Copy *.jar and *.xml to bin
+;
+; 1.0.0.5 (2020-06-15)
+; * Lowercase standard keywords in PascalScript
 
 #include AddBackslash(SourcePath) + "includes.iss"
 
@@ -190,14 +193,14 @@ Filename: "{app}\bin\tomcat.exe"; Parameters: """//DS//{code:GetServiceName}"" -
   * Service installation at post-install stage if task selected
 }
 
-Const
+const
   SC_MANAGER_CONNECT   = 1;
   SERVICE_QUERY_STATUS = 4;
 
-Type
+type
   TSCHandle = THandle;
   TServiceStatus =
-    Record
+    record
     dwServiceType:             DWORD;
     dwCurrentState:            DWORD;
     dwControlsAccepted:        DWORD;
@@ -205,358 +208,358 @@ Type
     dwServiceSpecificExitCode: DWORD;
     dwCheckPoint:              DWORD;
     dwWaitHint:                DWORD;
-    End;
+    end;
 
-Var
+var
   // Custom jvm.dll selection page
   JVMPage: TInputFileWizardPage;
   // Custom service configuration page
   ServicePage: TInputQueryWizardPage;
   // Command line parameters; these can be updated by custom wizard pages
   ArgInstance, ArgJVMPath, ArgServiceName, ArgServiceDisplayName,
-  ArgServiceUserName, ArgJVMOptions, ArgJVMMS, ArgJVMMX: String;
+  ArgServiceUserName, ArgJVMOptions, ArgJVMMS, ArgJVMMX: string;
 
-Function OpenSCManager(lpMachineName: String; lpDatabaseName: String; dwDesiredAccess: DWORD): TSCHandle;
-  External 'OpenSCManagerW@advapi32.dll stdcall';
-Function OpenService(hSCManager: TSCHandle; lpServiceName: String; dwDesiredAccess: DWORD): TSCHandle;
-  External 'OpenServiceW@advapi32.dll stdcall';
-Function QueryServiceStatus(hService: TSCHandle; Out lpServiceStatus: TServiceStatus): BOOL;
-  External 'QueryServiceStatus@advapi32.dll stdcall';
-Function CloseServiceHandle(hSCObject: TSCHandle): BOOL;
-  External 'CloseServiceHandle@advapi32.dll stdcall';
+function OpenSCManager(lpMachineName: string; lpDatabaseName: string; dwDesiredAccess: DWORD): TSCHandle;
+  external 'OpenSCManagerW@advapi32.dll stdcall';
+function OpenService(hSCManager: TSCHandle; lpServiceName: string; dwDesiredAccess: DWORD): TSCHandle;
+  external 'OpenServiceW@advapi32.dll stdcall';
+function QueryServiceStatus(hService: TSCHandle; out lpServiceStatus: TServiceStatus): BOOL;
+  external 'QueryServiceStatus@advapi32.dll stdcall';
+function CloseServiceHandle(hSCObject: TSCHandle): BOOL;
+  external 'CloseServiceHandle@advapi32.dll stdcall';
 
 // Get whether service exists
 // Acknowledgment: TLama (https://stackoverflow.com/questions/32463808/)
-Function ServiceExists(ServiceName: String): Boolean;
-  Var
+function ServiceExists(ServiceName: string): boolean;
+  var
     Manager, Service: TSCHandle;
     Status: TServiceStatus;
-  Begin
-  Result := False;
-  Manager := OpenSCManager('', '', SC_MANAGER_CONNECT);
-  If Manager <> 0 Then
-    Try
-      Service := OpenService(Manager, ServiceName, SERVICE_QUERY_STATUS);
-      If Service <> 0 Then
-        Try
-          Result := QueryServiceStatus(Service, Status);
-        Finally
-          CloseServiceHandle(Service);
-        End; //Try
-    Finally
-      CloseServiceHandle(Manager);
-    End //Try
-  Else
-    RaiseException('OpenSCManager failed: ' + SysErrorMessage(DLLGetLastError));
-  End;
-
-// Support for GetImageType()
-Function BufferToWord(Const Buffer: String): Word;
   begin
-  Result := Ord(Buffer[1]);
+  result := false;
+  Manager := OpenSCManager('', '', SC_MANAGER_CONNECT);
+  if Manager <> 0 then
+    try
+      Service := OpenService(Manager, ServiceName, SERVICE_QUERY_STATUS);
+      if Service <> 0 then
+        try
+          result := QueryServiceStatus(Service, Status);
+        finally
+          CloseServiceHandle(Service);
+        end; //try
+    finally
+      CloseServiceHandle(Manager);
+    end //try
+  else
+    RaiseException('OpenSCManager failed: ' + SysErrorMessage(DLLGetLastError));
   end;
 
 // Support for GetImageType()
-Function BufferToLongWord(Const Buffer: String): LongWord;
-  Begin
-  Result := (Ord(Buffer[2]) Shl 16) + Ord(Buffer[1]);
-  End;
+function BufferToWord(const Buffer: string): word;
+  begin
+  result := ord(Buffer[1]);
+  end;
 
 // Support for GetImageType()
-Function ReadFromStream(Stream: TStream; Size: Integer): LongWord;
-  Var
-    Buffer: String;
-  Begin
-  Try
-    SetLength(Buffer, Size Div 2);
+function BufferToLongWord(const Buffer: string): longword;
+  begin
+  result := (ord(Buffer[2]) shl 16) + ord(Buffer[1]);
+  end;
+
+// Support for GetImageType()
+function ReadFromStream(Stream: TStream; Size: integer): longword;
+  var
+    Buffer: string;
+  begin
+  try
+    SetLength(Buffer, Size div 2);
     Stream.ReadBuffer(Buffer, Size);
-    Case Size Of
-      2: Result := BufferToWord(Buffer);
-      4: Result := BufferToLongWord(Buffer);
-    End; //Case
-  Except
-    Result := 0;
-  End; //Try
-  End;
+    case Size of
+      2: result := BufferToWord(Buffer);
+      4: result := BufferToLongWord(Buffer);
+    end; //case
+  except
+    result := 0;
+  end; //try
+  end;
 
 // Gets EXE/DLL image type; returns:
 // * 0 for 32-bit image
 // * 1 for 64-bit image
 // * -1 for unknown type
 // Acknowledgment: TLama (https://stackoverflow.com/questions/19932165/)
-Function GetImageType(Const FileName: String): Integer;
-  Var
+function GetImageType(const FileName: string): integer;
+  var
     FileStream: TFileStream;
-    PEOffset: LongWord;
-    MagicNumber: Word;
-  Begin
-  Result := -1;
-  FileStream := TFileStream.Create(FileName, fmOpenRead Or fmShareDenyNone);
-  Try
+    PEOffset: longword;
+    MagicNumber: word;
+  begin
+  result := -1;
+  FileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
+  try
     FileStream.Position := $3C;
     PEOffset := ReadFromStream(FileStream, SizeOf(PEOffset));
     FileStream.Position := PEOffset + $18;
     MagicNumber := ReadFromStream(FileStream, SizeOf(MagicNumber));
-    Case MagicNumber Of
-      $010B: Result := 0; // 32-bit image
-      $020B: Result := 1; // 64-bit image
-    End; //Case
-  Finally
+    case MagicNumber of
+      $010B: result := 0; // 32-bit image
+      $020B: result := 1; // 64-bit image
+    end; //case
+  finally
     FileStream.Free();
-  End; //Try
-  End;
+  end; //try
+  end;
 
 // Is jvm.dll file 64-bit?
-Function IsJVM64Bit(): Boolean;
-  Begin
-  Result := GetImageType(ArgJVMPath) = 1;
-  End;
+function IsJVM64Bit(): boolean;
+  begin
+  result := GetImageType(ArgJVMPath) = 1;
+  end;
 
 // Get string representation of jvm.dll image type
-Function GetJVMImageType(): String;
-  Var
-    ImageType: Integer;
-  Begin
+function GetJVMImageType(): string;
+  var
+    ImageType: integer;
+  begin
   ImageType := GetImageType(ArgJVMPath);
-  Case ImageType Of
-    -1: Result := 'unknown';
-    0:  Result := '32-bit';
-    1:  Result := '64-bit';
-  End; //Case
-  End;
+  case ImageType of
+    -1: result := 'unknown';
+    0:  result := '32-bit';
+    1:  result := '64-bit';
+  end; //case
+  end;
 
 // Get installation instance name (see 'Scripted Constants' section in docs)
-Function GetInstanceName(Param: String): String;
-  Begin
-  Result := ArgInstance;
-  End;
+function GetInstanceName(Param: string): string;
+  begin
+  result := ArgInstance;
+  end;
 
 // Get AppId (see 'Scripted Constants' section in docs)
-Function GetAppId(Param: String): String;
-  Begin
-  Result := ExpandConstant('{{#AppGUID}-') + ArgInstance;
-  End;
+function GetAppId(Param: string): string;
+  begin
+  result := ExpandConstant('{{#AppGUID}-') + ArgInstance;
+  end;
 
 // Get AppName (see 'Scripted Constants' section in docs)
-Function GetAppName(Param: String): String;
-  Begin
-  If CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 Then
-    Result := ExpandConstant('{#AppName}')
-  Else
-    Result := ExpandConstant('{#AppName} - ') + ArgInstance;
-  End;
+function GetAppName(Param: string): string;
+  begin
+  if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
+    result := ExpandConstant('{#AppName}')
+  else
+    result := ExpandConstant('{#AppName} - ') + ArgInstance;
+  end;
 
 // Get string containing date/time (see 'Scripted Constants' section in docs)
-Function GetDateString(Param: String): String;
-  Begin
-  Result := GetDateTimeString('yyyymmddhhnnss', '-', '-');
-  End;
+function GetDateString(Param: string): string;
+  begin
+  result := GetDateTimeString('yyyymmddhhnnss', '-', '-');
+  end;
 
 // Get service name (see 'Scripted Constants' section in docs)
-Function GetServiceName(Param: String): String;
-  Begin
-  Result := ArgServiceName;
-  End;
+function GetServiceName(Param: string): string;
+  begin
+  result := ArgServiceName;
+  end;
 
 // Get service user name (see 'Scripted Constants' section in docs)
-Function GetServiceUserName(Param: String): String;
-  Begin
-  Result := ArgServiceUserName;
-  End;
+function GetServiceUserName(Param: string): string;
+  begin
+  result := ArgServiceUserName;
+  end;
 
 // Does instance have installed service?
-Function DoesInstanceHaveService(): Boolean;
-  Var
-    ServiceName: String;
-  Begin
+function DoesInstanceHaveService(): boolean;
+  var
+    ServiceName: string;
+  begin
   ServiceName := '';
-  Result := RegQueryStringValue(HKEY_LOCAL_MACHINE, ExpandConstant('{#RegistryRootPath}\Instances\') + ArgInstance, 'ServiceName', ServiceName) And (Trim(ServiceName) <> '');
-  End;
+  result := RegQueryStringValue(HKEY_LOCAL_MACHINE, ExpandConstant('{#RegistryRootPath}\Instances\') + ArgInstance, 'ServiceName', ServiceName) and (Trim(ServiceName) <> '');
+  end;
 
 // Searches a subdirectory tree for a file by name
 // Acknowledgment: Martin Prikryl (https://stackoverflow.com/questions/37133947/)
-Function FindFile(RootPath: String; FileName: String): String;
-  Var
+function FindFile(RootPath: string; FileName: string): string;
+  var
     FindRec: TFindRec;
-    FilePath: String;
-  Begin
-  If FindFirst(RemoveBackslashUnlessRoot(RootPath) + '\*', FindRec) Then
-    Try
-      Repeat
-        If (FindRec.Name <> '.') And (FindRec.Name <> '..') Then
-          Begin
+    FilePath: string;
+  begin
+  if FindFirst(RemoveBackslashUnlessRoot(RootPath) + '\*', FindRec) then
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+          begin
           FilePath := RemoveBackslashUnlessRoot(RootPath) + '\' + FindRec.Name;
-          If FindRec.Attributes And FILE_ATTRIBUTE_DIRECTORY <> 0 Then
-            Begin
-            Result := FindFile(FilePath, FileName);
-            If Result <> '' Then
-              Exit;
-            End
-          Else If CompareText(FindRec.Name, FileName) = 0 Then
-            Begin
-            Result := FilePath;
-            Exit;
-            End
-          Else
-            Result := '';
-          End;
-      Until Not FindNext(FindRec);
-    Finally
+          if FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0 then
+            begin
+            result := FindFile(FilePath, FileName);
+            if result <> '' then
+              exit;
+            end
+          else if CompareText(FindRec.Name, FileName) = 0 then
+            begin
+            result := FilePath;
+            exit;
+            end
+          else
+            result := '';
+          end;
+      until not FindNext(FindRec);
+    finally
       FindClose(FindRec);
-    End; //Try
-  End;
+    end; //try
+  end;
 
 // Compares two version number strings; returns:
 // -1 if V1 < V2, 0 if V1 = V2, or 1 if V1 > V2
 // Acknowledgment: Martin Prikryl (https://stackoverflow.com/questions/37825650/)
-Function CompareVersions(V1, V2: String): Integer;
-  Var
-    P, N1, N2: Integer;
-  Begin
-  Result := 0;
-  While (Result = 0) And ((V1 <> '') Or (V2 <> '')) Do
-    Begin
+function CompareVersions(V1, V2: string): integer;
+  var
+    P, N1, N2: integer;
+  begin
+  result := 0;
+  while (result = 0) and ((V1 <> '') or (V2 <> '')) do
+    begin
     P := Pos('.', V1);
-    If P > 0 Then
-      Begin
+    if P > 0 then
+      begin
       N1 := StrToIntDef(Copy(V1, 1, P - 1), 0);
       Delete(V1, 1, P);
-      End
-    Else If V1 <> '' Then
-      Begin
+      end
+    else if V1 <> '' then
+      begin
       N1 := StrToIntDef(V1, 0);
       V1 := '';
-      End
-    Else
+      end
+    else
       N1 := 0;
     P := Pos('.', V2);
-    If P > 0 Then
-      Begin
+    if P > 0 then
+      begin
       N2 := StrToIntDef(Copy(V2, 1, P - 1), 0);
       Delete(V2, 1, P);
-      End
-    Else If V2 <> '' Then
-      Begin
+      end
+    else if V2 <> '' then
+      begin
       N2 := StrToIntDef(V2, 0);
       V2 := '';
-      End
-    Else
+      end
+    else
       N2 := 0;
-    If N1 < N2 Then
-      Result := -1
-    Else If N1 > N2 Then
-      Result := 1;
-    End;
-  End;
+    if N1 < N2 then
+      result := -1
+    else if N1 > N2 then
+      result := 1;
+    end;
+  end;
 
 // Tries to find jvm.dll
-Function FindJVM(): String;
-  Var
+function FindJVM(): string;
+  var
     StringList, SubkeyNames: TArrayOfString;
-    I, RootKey, J: Integer;
-    SubkeyExists: Boolean;
-    SubkeyName, LatestVersion, EnvHome: String;
-  Begin
-  Result := '';
+    I, RootKey, J: integer;
+    SubkeyExists: boolean;
+    SubkeyName, LatestVersion, EnvHome: string;
+  begin
+  result := '';
   // Search registry for 'RuntimeLib' value in these locations
   SetArrayLength(StringList, 2);
   StringList[0] := 'SOFTWARE\JavaSoft\Java Runtime Environment';
   StringList[1] := 'SOFTWARE\JavaSoft\JRE';
-  For I := 0 To GetArrayLength(StringList) - 1 Do
-    Begin
-    SubkeyExists := False;
+  for I := 0 to GetArrayLength(StringList) - 1 do
+    begin
+    SubkeyExists := false;
     SubkeyName := StringList[I];
-    If IsWin64() Then
-      Begin
+    if IsWin64() then
+      begin
       SubkeyExists := RegKeyExists(HKEY_LOCAL_MACHINE_64, SubkeyName);
-      If SubkeyExists Then
+      if SubkeyExists then
         RootKey := HKEY_LOCAL_MACHINE_64
-      Else
-        Begin
+      else
+        begin
         SubkeyExists := RegKeyExists(HKEY_LOCAL_MACHINE_32, SubkeyName);
-        If SubkeyExists Then
+        if SubkeyExists then
           RootKey := HKEY_LOCAL_MACHINE_32;
-        End;
-      End
-    Else
-      Begin
+        end;
+      end
+    else
+      begin
       SubkeyExists := RegKeyExists(HKEY_LOCAL_MACHINE, SubkeyName);
-      If SubkeyExists Then
+      if SubkeyExists then
         RootKey := HKEY_LOCAL_MACHINE;
-      End;
-    If SubkeyExists Then
-      Begin
+      end;
+    if SubkeyExists then
+      begin
       LatestVersion := '0';
-      If RegGetSubkeyNames(RootKey, SubkeyName, SubkeyNames) Then
-        Begin
-        For J := 0 To GetArrayLength(SubkeyNames) - 1 Do
-          Begin
-          If CompareVersions(SubkeyNames[J], LatestVersion) > 0 Then
+      if RegGetSubkeyNames(RootKey, SubkeyName, SubkeyNames) then
+        begin
+        for J := 0 to GetArrayLength(SubkeyNames) - 1 do
+          begin
+          if CompareVersions(SubkeyNames[J], LatestVersion) > 0 then
             LatestVersion := SubkeyNames[J];
-          End;
-        If RegQueryStringValue(RootKey, SubkeyName + '\' + LatestVersion, 'RuntimeLib', Result) Then
-          Break;
-        End;
-      End;
-    End;
-  If Result = '' Then
-    Begin
+          end;
+        if RegQueryStringValue(RootKey, SubkeyName + '\' + LatestVersion, 'RuntimeLib', result) then
+          break;
+        end;
+      end;
+    end;
+  if result = '' then
+    begin
     // Registry search failed; try environment variables
     SetArrayLength(StringList, 2);
     StringList[0] := 'JAVA_HOME';
     StringList[1] := 'JRE_HOME';
-    For I := 0 To GetArrayLength(StringList) - 1 Do
-      Begin
+    for I := 0 to GetArrayLength(StringList) - 1 do
+      begin
       EnvHome := Trim(RemoveBackslashUnlessRoot(GetEnv(StringList[I])));
-      If (EnvHome <> '') And DirExists(EnvHome) Then
-        Result := FindFile(EnvHome, 'jvm.dll');
-      If Result <> '' Then
-        Break;
-      End;
-    End;
-  End;
+      if (EnvHome <> '') and DirExists(EnvHome) then
+        result := FindFile(EnvHome, 'jvm.dll');
+      if result <> '' then
+        break;
+      end;
+    end;
+  end;
 
 // Removes whitespace from a string
-Function RemoveWhitespace(S: String): String;
-  Var
+function RemoveWhitespace(S: string): string;
+  var
     WS: TArrayOfString;
-    I: Integer;
-  Begin
+    I: integer;
+  begin
   SetArrayLength(WS, 2);
   WS[0] := #9;
   WS[1] := ' ';
-  For I := 0 To GetArrayLength(WS) - 1 Do
-    StringChangeEx(S, WS[I], '', True);
-  Result := S;
-  End;
+  for I := 0 to GetArrayLength(WS) - 1 do
+    StringChangeEx(S, WS[I], '', true);
+  result := S;
+  end;
 
-Function InitializeSetup(): Boolean;
-  Begin
-  Result := True;
+function InitializeSetup(): boolean;
+  begin
+  result := true;
   // Instance name
   ArgInstance := Trim(ExpandConstant('{param:instance|{#DefaultInstance}}'));
   // JVM path (if unspecified, search)
   ArgJVMPath := Trim(ExpandConstant('{param:jvmpath}'));
-  If ArgJVMPath = '' Then
+  if ArgJVMPath = '' then
     ArgJVMPath := Trim(FindJVM());
   // Service name (if unspecified, default depends on instance name)
   ArgServiceName := Trim(ExpandConstant('{param:servicename}'));
-  If ArgServiceName = '' Then
-    Begin
-    If CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 Then
+  if ArgServiceName = '' then
+    begin
+    if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
       ArgServiceName := ExpandConstant('{#DefaultServiceName}')
-    Else
+    else
       ArgServiceName := ExpandConstant('{#DefaultServiceName}-') + RemoveWhitespace(ArgInstance);
-    End;
+    end;
   // Service display name (if unspecified, default depends on instance name)
   ArgServiceDisplayName := Trim(ExpandConstant('{param:servicedisplayname}'));
-  If ArgServiceDisplayName = '' Then
-    Begin
-    If CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 Then
+  if ArgServiceDisplayName = '' then
+    begin
+    if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
       ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName}')
-    Else
+    else
       ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName} - ') + ArgInstance;
-    End;
+    end;
   // Service username
   ArgServiceUserName := Trim(ExpandConstant('{param:serviceusername|{#DefaultServiceUserName}}'));
   // JVM options
@@ -564,77 +567,77 @@ Function InitializeSetup(): Boolean;
   // Memory settings
   ArgJVMMS := Trim(ExpandConstant('{param:jvmms|{#DefaultJVMMS}}'));
   ArgJVMMX := Trim(ExpandConstant('{param:jvmmx|{#DefaultJVMMX}}'));
-  End;
+  end;
 
-Procedure InitializeWizard();
-  Begin
+procedure InitializeWizard();
+  begin
   // Add custom jvm.dll selection page
   JVMPage := CreateInputFilePage(wpSelectTasks, CustomMessage('JVMPageCaption'), CustomMessage('JVMPageDescription'), CustomMessage('JVMPageSubCaption'));
   JVMPage.Add(CustomMessage('JVMPagePathItemCaption'), 'DLL files|*.dll', '');
   JVMPage.Values[0] := ArgJVMPath;
   // Add custom service configuration page
   ServicePage := CreateInputQueryPage(JvmPage.ID, CustomMessage('ServicePageCaption'), CustomMessage('ServicePageDescription'), CustomMessage('ServicePageSubCaption'));
-  ServicePage.Add(CustomMessage('ServicePageServiceNameItemCaption'), False);
+  ServicePage.Add(CustomMessage('ServicePageServiceNameItemCaption'), false);
   ServicePage.Values[0] := ArgServiceName;
-  ServicePage.Add(CustomMessage('ServicePageServiceDisplayNameItemCaption'), False);
+  ServicePage.Add(CustomMessage('ServicePageServiceDisplayNameItemCaption'), false);
   ServicePage.Values[1] := ArgServiceDisplayName;
-  ServicePage.Add(CustomMessage('ServicePageServiceUserNameItemCaption'), False);
+  ServicePage.Add(CustomMessage('ServicePageServiceUserNameItemCaption'), false);
   ServicePage.Values[2] := ArgServiceUserName;
-  ServicePage.Add(CustomMessage('ServicePageServiceJVMOptionsItemCaption'), False);
+  ServicePage.Add(CustomMessage('ServicePageServiceJVMOptionsItemCaption'), false);
   ServicePage.Values[3] := ArgJVMOptions;
-  ServicePage.Add(CustomMessage('ServicePageServiceJVMMSItemCaption'), False);
+  ServicePage.Add(CustomMessage('ServicePageServiceJVMMSItemCaption'), false);
   ServicePage.Values[4] := ArgJVMMS;
-  ServicePage.Add(CustomMessage('ServicePageServiceJVMMXItemCaption'), False);
+  ServicePage.Add(CustomMessage('ServicePageServiceJVMMXItemCaption'), false);
   ServicePage.Values[5] := ArgJVMMX;
-  End;
+  end;
 
-Function ShouldSkipPage(PageID: Integer): Boolean;
-  Begin
+function ShouldSkipPage(PageID: integer): boolean;
+  begin
   // Skip service configuration page if not installing service
-  Result := False;
-  If PageID = ServicePage.ID Then
-    Result := Not WizardIsTaskSelected('installservice');
-  End;
+  result := false;
+  if PageID = ServicePage.ID then
+    result := not WizardIsTaskSelected('installservice');
+  end;
 
-Function NextButtonClick(CurPageID: Integer): Boolean;
-  Var
-    I, ID, Value: Integer;
+function NextButtonClick(CurPageID: integer): boolean;
+  var
+    I, ID, Value: integer;
     ControlValues: TArrayOfString;
     Controls: TArrayOfInteger;
-  Begin
-  Result := True;
-  If CurPageID = JVMPage.ID Then
-    Begin
+  begin
+  result := true;
+  if CurPageID = JVMPage.ID then
+    begin
     // Ensure that filename is specified and exists
-    Result := Trim(JVMPage.Values[0]) <> '';
-    If Not Result Then
-      Begin
+    result := Trim(JVMPage.Values[0]) <> '';
+    if not result then
+      begin
       Log(CustomMessage('ErrorJVMPathEmptyLogMessage'));
-      If Not WizardSilent() Then
-        Begin
+      if not WizardSilent() then
+        begin
         MsgBox(CustomMessage('ErrorJVMPathEmptyGUIMessage'), mbError, MB_OK);
         JVMPage.Values[0] := FindJVM();
         WizardForm.ActiveControl := JVMPage.Edits[0];
         JVMPage.Edits[0].SelectAll();
-        End;
-      Exit;
-      End;
-    Result := FileExists(Trim(JVMPage.Values[0]));
-    If Not Result Then
-      Begin
+        end;
+      exit;
+      end;
+    result := FileExists(Trim(JVMPage.Values[0]));
+    if not result then
+      begin
       Log(FmtMessage(CustomMessage('ErrorJVMPathFileNotFoundLogMessage'), [Trim(JVMPage.Values[0])]));
-      If Not WizardSilent() Then
-        Begin
+      if not WizardSilent() then
+        begin
         MsgBox(CustomMessage('ErrorJVMPathFileNotFoundGUIMessage'), mbError, MB_OK);
         WizardForm.ActiveControl := JVMPage.Edits[0];
         JVMPage.Edits[0].SelectAll();
-        End;
-      Exit;
-      End;
+        end;
+      exit;
+      end;
     ArgJVMPath := Trim(JVMPage.Values[0]);
-    End
-  Else If CurPageID = ServicePage.ID Then
-    Begin
+    end
+  else if CurPageID = ServicePage.ID then
+    begin
     // Specify default values for controls on page
     SetArrayLength(ControlValues, 6);
     ControlValues[0] := ArgServiceName;
@@ -651,155 +654,155 @@ Function NextButtonClick(CurPageID: Integer): Boolean;
     Controls[3] := 4;
     Controls[4] := 5;
     // Validate controls that require values
-    For I := 0 To GetArrayLength(Controls) - 1 Do
-      Begin
+    for I := 0 to GetArrayLength(Controls) - 1 do
+      begin
       ID := Controls[I];
-      Result := Trim(ServicePage.Values[ID]) <> '';
-      If Not Result Then
-        Begin
+      result := Trim(ServicePage.Values[ID]) <> '';
+      if not result then
+        begin
         Log(FmtMessage(CustomMessage('ErrorServiceConfigValueMissingLogMessage'), [ServicePage.PromptLabels[ID].Caption]));
-        If Not WizardSilent() Then
-          Begin
+        if not WizardSilent() then
+          begin
           MsgBox(CustomMessage('ErrorServiceConfigValueMissingGUIMessage'), mbError, MB_OK);
           ServicePage.Values[ID] := ControlValues[ID];
           WizardForm.ActiveControl := ServicePage.Edits[ID];
           ServicePage.Edits[ID].SelectAll();
-          End;
-        Exit;
-        End;
-      End;
+          end;
+        exit;
+        end;
+      end;
     // Validate service does not exist
     ID := Controls[0];
-    Result := Not ServiceExists(Trim(ServicePage.Values[ID]));
-    If Not Result Then
-      Begin
+    result := not ServiceExists(Trim(ServicePage.Values[ID]));
+    if not result then
+      begin
       Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceAlreadyExistsLogMessage'), [Trim(ServicePage.Values[ID])]));
-      If Not WizardSilent() Then
-        Begin
+      if not WizardSilent() then
+        begin
         MsgBox(CustomMessage('ErrorServiceConfigServiceAlreadyExistsGUIMessage'), mbError, MB_OK);
         WizardForm.ActiveControl := ServicePage.Edits[ID];
         ServicePage.Edits[ID].SelectAll();
-        End;
-      Exit;
-      End;
+        end;
+      exit;
+      end;
     // Validate service name does not contain whitespace
     ID := Controls[0];
-    Result := (Pos(' ', Trim(ServicePage.Values[ID])) = 0) And (Pos(#9, Trim(ServicePage.Values[ID])) = 0);
-    If Not Result Then
-      Begin
+    result := (Pos(' ', Trim(ServicePage.Values[ID])) = 0) and (Pos(#9, Trim(ServicePage.Values[ID])) = 0);
+    if not result then
+      begin
       Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceNameLogMessage'), [Trim(ServicePage.Values[ID])]));
-      If Not WizardSilent() Then
-        Begin
+      if not WizardSilent() then
+        begin
         MsgBox(CustomMessage('ErrorServiceConfigServiceNameGUIMessage'), mbError, MB_OK);
         WizardForm.ActiveControl := ServicePage.Edits[ID];
         ServicePage.Edits[ID].SelectAll();
-        End;
-      Exit;
-      End;
+        end;
+      exit;
+      end;
     // Specify which controls require non-zero values
     SetArrayLength(Controls, 2);
     Controls[0] := 4;
     Controls[1] := 5;
-    For I := 0 To GetArrayLength(Controls) - 1 Do
-      Begin
+    for I := 0 to GetArrayLength(Controls) - 1 do
+      begin
       ID := Controls[I];
       Value := StrToIntDef(Trim(ServicePage.Values[ID]), 0);
-      Result := Value > 0;
-      If Not Result Then
-        Begin
+      result := Value > 0;
+      if not result then
+        begin
         Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceMemoryLogMessage'), [Trim(ServicePage.Values[ID]), ServicePage.PromptLabels[ID].Caption]));
-        If Not WizardSilent() Then
-          Begin
+        if not WizardSilent() then
+          begin
           MsgBox(CustomMessage('ErrorServiceConfigServiceMemoryGUIMessage'), mbError, MB_OK);
           ServicePage.Values[ID] := ControlValues[ID];
           WizardForm.ActiveControl := ServicePage.Edits[ID];
           ServicePage.Edits[ID].SelectAll();
-          End;
-        Exit;
-        End;
-      End;
+          end;
+        exit;
+        end;
+      end;
     ArgServiceName := Trim(ServicePage.Values[0]);
     ArgServiceDisplayName := Trim(ServicePage.Values[1]);
     ArgServiceUserName := Trim(ServicePage.Values[2]);
     ArgJVMOptions := Trim(ServicePage.Values[3]);
     ArgJVMMS := Trim(ServicePage.Values[4]);
     ArgJVMMX := Trim(ServicePage.Values[5]);
-    End;
-  End;
+    end;
+  end;
 
-Function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
-  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
-  Var
-    S: String;
-  Begin
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
+  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: string): string;
+  var
+    S: string;
+  begin
   S := '';
-  If MemoUserInfoInfo <> '' Then
-    Begin
-    If S <> '' Then
+  if MemoUserInfoInfo <> '' then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoUserInfoInfo;
-    End;
-  If MemoDirInfo <> '' Then
-    Begin
-    If S <> '' Then
+    end;
+  if MemoDirInfo <> '' then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoDirInfo;
-    End;
-  If MemoTypeInfo <> '' Then
-    Begin
-    If S <> '' Then
+    end;
+  if MemoTypeInfo <> '' then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoTypeInfo;
-    End;
-  If MemoComponentsInfo <> '' Then
-    Begin
-    If S <> '' Then
+    end;
+  if MemoComponentsInfo <> '' then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoComponentsInfo;
-    End;
-  If MemoGroupInfo <> '' Then
-    Begin
-    If S <> '' Then
+    end;
+  if MemoGroupInfo <> '' then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoGroupInfo;
-    End;
-  If MemoTasksInfo <> '' Then
-    Begin
-    If S <> '' Then
+    end;
+  if MemoTasksInfo <> '' then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoTasksInfo;
-    End;
+    end;
   // List path of jvm.dll file
-  If S <> '' Then
+  if S <> '' then
     S := S + NewLine + NewLine;
   S := S + CustomMessage('ReadyMemoJVMPathInfo') + NewLine
     + Space + ArgJVMPath;
   // If installing service, list service configuration information
-  If WizardIsTaskSelected('installservice') Then
-    Begin
-    If S <> '' Then
+  if WizardIsTaskSelected('installservice') then
+    begin
+    if S <> '' then
       S := S + NewLine + NewLine;
     S := S + CustomMessage('ReadyMemoServiceConfigInfo') + NewLine
       + Space + CustomMessage('ReadyMemoServiceNameInfo') + ' ' + ArgServiceName + NewLine
       + Space + CustomMessage('ReadyMemoServiceDisplayNameInfo') + ' ' + ArgServiceDisplayName + NewLine
       + Space + CustomMessage('ReadyMemoServiceUserNameInfo') + ' ' + ArgServiceUserName + NewLine;
-    If ArgJVMOptions <> '' Then
+    if ArgJVMOptions <> '' then
       S := S + Space + CustomMessage('ReadyMemoServiceJVMOptionsInfo') + ' ' + ArgJVMOptions + NewLine;
     S := S + Space + CustomMessage('ReadyMemoServiceJVMMSInfo') + ' ' + ArgJVMMS + 'MB' + NewLine
       + Space + CustomMessage('ReadyMemoServiceJVMMXInfo') + ' ' + ArgJVMMX + 'MB';
-    End;
-  Result := S;
-  End;
+    end;
+  result := S;
+  end;
 
-Procedure InstallService();
-  Var
-    Executable, StartupMode, Params, ErrorMessage: String;
-    ResultCode: Integer;
-  Begin
+procedure InstallService();
+  var
+    Executable, StartupMode, Params, ErrorMessage: string;
+    ResultCode: integer;
+  begin
   Executable := ExpandConstant('{app}\bin\tomcat.exe');
-  If WizardIsTaskSelected('installservice/setautostart') Then
+  if WizardIsTaskSelected('installservice/setautostart') then
     StartupMode := 'auto'
-  Else
+  else
     StartupMode := 'manual';
   Params := '"//IS//' + ArgServiceName + '"'
     + ' --DisplayName "' + ArgServiceDisplayName + '"'
@@ -827,7 +830,7 @@ Procedure InstallService();
     +     '-Djava.io.tmpdir={app}\temp;'
     +     '-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager;'
     +     '-Djava.util.logging.config.file={app}\conf\logging.properties');
-  If ArgJVMOptions <> '' Then
+  if ArgJVMOptions <> '' then
     Params := Params
       + ';' + ArgJVMOptions;
   Params := Params + '"'
@@ -837,27 +840,27 @@ Procedure InstallService();
     + ' --JvmMs ' + ArgJVMMS
     + ' --JvmMx ' + ArgJVMMX;
   Log(FmtMessage(CustomMessage('ServiceInstallCommandLogMessage'), [Executable, Params]));
-  If (Not Exec(Executable, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) Or (ResultCode <> 0) Then
-    Begin
+  if (not Exec(Executable, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
+    begin
     ErrorMessage := SysErrorMessage(ResultCode);
     Log(FmtMessage(CustomMessage('ErrorServiceInstallLogMessage'), [ArgServiceName, IntToStr(ResultCode), ErrorMessage]));
-    If Not WizardSilent() Then
+    if not WizardSilent() then
       MsgBox(FmtMessage(CustomMessage('ErrorServiceInstallGUIMessage'), [IntToStr(ResultCode), ErrorMessage]), mbCriticalError, MB_OK);
-    End
-  Else
+    end
+  else
     Log(CustomMessage('ServiceInstallCommandSucceededLogMessage'));
-  End;
+  end;
 
-Procedure CurStepChanged(CurStep: TSetupStep);
-  Begin
-  If CurStep = ssInstall Then
-    Begin
+procedure CurStepChanged(CurStep: TSetupStep);
+  begin
+  if CurStep = ssInstall then
+    begin
     Log(FmtMessage(CustomMessage('JVMPathLogMessage'), [ArgJVMPath]));
     Log(FmtMessage(CustomMessage('JVMImageTypeLogMessage'), [GetJVMImageType()]));
-    End
-  Else If CurStep = ssPostInstall Then
-    Begin
-    If WizardIsTaskSelected('installservice') Then
+    end
+  else if CurStep = ssPostInstall then
+    begin
+    if WizardIsTaskSelected('installservice') then
       InstallService();
-    End;
-  End;
+    end;
+  end;
