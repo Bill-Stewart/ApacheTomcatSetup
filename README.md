@@ -45,7 +45,9 @@ This custom Apache Tomcat Setup installer rectifies these limitations.
 
 Please note the following when using Setup to reinstall or upgrade Apache Tomcat:
 
-* Setup won't overwrite files in the `conf` directory that are newer than the copies stored in Setup. This means that you can prevent accidental overwrites of customized files by updating them (open and save to update date and time, or use a "touch" utility) before reinstalling or upgrading.
+* **IMPORTANT:** If a file in Setup is newer than the corresponding file already on disk, Setup assumes the file needs to be upgraded and will overwrite it. Therefore, to prevent accidental overwriting of customized files (e.g., configuration files in the `conf` directory), **the Tomcat administrator must update all customized configuration files** (open and save to update date and time, or use a "touch" utility) _before_ reinstalling or upgrading.
+
+* Obsolete files in the included web applications are not removed when upgrading. It is the Tomcat administrator's responsibility to manually manage the web application files in the `webapps` directory.
 
 * If the Windows service is installed, Setup can automatically stop the service, upgrade the binaries, and restart the service. All service installation details are retained when reinstalling or upgrading.
 

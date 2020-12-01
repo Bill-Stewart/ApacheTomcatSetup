@@ -33,6 +33,12 @@
 ;
 ; 1.0.0.5 (2020-06-15)
 ; * Lowercase standard keywords in PascalScript
+;
+; 1.0.0.6 (2020-11-25)
+; * CloseApplications directive set to "force" mode
+; * Delete lib\ecj-*.*.jar at install time to ensure only latest version gets
+;   installed
+; * Add comparetimestamp flag to *.jar files install
 
 #include AddBackslash(SourcePath) + "includes.iss"
 
@@ -46,7 +52,7 @@ AppVersion={#AppFullVersion}
 AppUpdatesURL={#AppUpdatesURL}
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
-CloseApplications=yes
+CloseApplications=force
 CloseApplicationsFilter=*.exe,*.dll,*.jar
 Compression=lzma2/max
 DefaultDirName={autopf}\{code:GetAppName}
@@ -95,6 +101,9 @@ Name: webapps/manager;     Description: "{cm:ComponentsWebAppsManagerDescription
 Name: webapps/hostmanager; Description: "{cm:ComponentsWebAppsHostManagerDescription}"; Types: full custom; Flags: dontinheritcheck
 Name: webapps/examples;    Description: "{cm:ComponentsWebAppsExamplesDescription}";    Types: full custom; Flags: dontinheritcheck
 
+[InstallDelete]
+Type: files; Name: "{app}\lib\ecj-*.*.jar"; Components: core
+
 [Files]
 ; README
 Source: "README.md"; DestDir: "{app}"; DestName: "README-Setup.md"
@@ -105,7 +114,7 @@ Source: "{#RootDir}\*"; DestDir: "{app}"; Excludes: "bin\*,conf\*,webapps\*"; Fl
 ; bin - Windows scripts
 Source: "{#RootDir}\bin\*.bat"; DestDir: "{app}\bin"; Flags: comparetimestamp
 ; bin - jar files
-Source: "{#RootDir}\bin\*.jar"; DestDir: "{app}\bin"
+Source: "{#RootDir}\bin\*.jar"; DestDir: "{app}\bin"; Flags: comparetimestamp
 ; bin - xml files
 Source: "{#RootDir}\bin\*.xml"; DestDir: "{app}\bin"; Flags: comparetimestamp 
 ; bin - Windows binaries - x64
