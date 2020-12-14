@@ -80,6 +80,22 @@ ServiceInstallCommandSucceededLogMessage=INFO: Service installation command exec
 JVMPathLogMessage=INFO: JVM path - "%1"
 JVMImageTypeLogMessage=INFO: jvm.dll image type - %1 (if unknown, assume 32-bit)
 
+; Running application/service messages
+ApplicationsRunningLogMessage=Applications are using files that need to be updated by Setup.
+ApplicationsRunningInstructionMessage=Running Applications Detected
+ApplicationsRunningTextMessage=The following applications and/or services are using files that need to be updated by Setup:%n%n%1%n%nSetup cannot continue unless you close the applications. If you continue, Setup will attempt to restart the services after the installation has completed.
+CloseApplicationsMessage=&Close the applications and continue Setup
+DontCloseApplicationsMessage=&Do not close the applications
+ApplicationsStillRunningMessage=Applications are still using files that need to be updated by Setup.
+RunCommandMessage=Run command: "%1" %2
+ClosedApplicationsMessage=Stopped running service(s) and closed running application(s).
+StartedServicesMessage=Service restart command(s) executed successfully.
+
+; Application progress page
+AppProgressPageInstallingCaption=Please wait while Setup installs %1 on your computer.
+AppProgressPageStoppingMessage=Stopping applications...
+AppProgressPageStartingMessage=Restarting stopped services...
+
 ; Error messages
 ErrorJVMPathEmptyLogMessage=ERROR: Unable to find jvm.dll file
 ErrorJVMPathEmptyGUIMessage={#AppName} requires a Java Virtual Machine (JVM).%n%nYou must specify the path to the jvm.dll file in order to complete the installation.

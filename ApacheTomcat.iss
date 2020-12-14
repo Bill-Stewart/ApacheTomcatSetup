@@ -39,6 +39,17 @@
 ; * Delete lib\ecj-*.*.jar at install time to ensure only latest version gets
 ;   installed
 ; * Add comparetimestamp flag to *.jar files install
+;
+; 9.0.41.0
+; * Follow Tomcat version numbering (with trailing ".0") to make it easier to
+;   check setup executable for version number of Tomcat it installs
+; * Replace Windows Restart Manager with custom WMI for automatic
+;   service/application stop and automatic service restart (Restart Manager
+;   APIs problematic for some applications and do not wait long enough for
+;   service/application stop)
+; * MinVersion set to 6.1sp1 (security protection against potential DLL
+;   preloading attacks)
+; * Fix: Skip JVM page and info on ready page if service already installed
 
 #include AddBackslash(SourcePath) + "includes.iss"
 
@@ -52,15 +63,14 @@ AppVersion={#AppFullVersion}
 AppUpdatesURL={#AppUpdatesURL}
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
-CloseApplications=force
-CloseApplicationsFilter=*.exe,*.dll,*.jar
+CloseApplications=no
 Compression=lzma2/max
 DefaultDirName={autopf}\{code:GetAppName}
 DefaultGroupName={code:GetAppName}
 DisableReadyMemo=no
 DisableReadyPage=no
 DisableWelcomePage=no
-MinVersion=6
+MinVersion=6.1sp1
 OutputBaseFilename={#SetupName}
 OutputDir=.
 PrivilegesRequired=admin
@@ -199,7 +209,10 @@ Filename: "{app}\bin\tomcat.exe"; Parameters: """//DS//{code:GetServiceName}"" -
   * Validate service does not exist before attempting to install it
   * Skip service config page if service install task not selected
   * Add JVM install details to 'Ready to Install' page
-  * Service installation at post-install stage if task selected
+  * Service configuration at post-install stage if task selected
+  * Use WMI to detect running services/executables
+  * If user decides, stop service(s) and automatically restart
+  * Stop running executables before installation
 }
 
 const
@@ -208,8 +221,7 @@ const
 
 type
   TSCHandle = THandle;
-  TServiceStatus =
-    record
+  TServiceStatus = record
     dwServiceType:             DWORD;
     dwCurrentState:            DWORD;
     dwControlsAccepted:        DWORD;
@@ -218,6 +230,18 @@ type
     dwCheckPoint:              DWORD;
     dwWaitHint:                DWORD;
     end;
+  TService = record
+    ProcessId:      DWORD;
+    Name:           string;
+    DisplayName:    string;
+    end;
+  TServiceList = array of TService;
+  TProcess = record
+    ProcessId:      DWORD;
+    Name:           string;
+    ExecutablePath: string;
+    end;
+  TProcessList = array of TProcess;
 
 var
   // Custom jvm.dll selection page
@@ -227,6 +251,13 @@ var
   // Command line parameters; these can be updated by custom wizard pages
   ArgInstance, ArgJVMPath, ArgServiceName, ArgServiceDisplayName,
   ArgServiceUserName, ArgJVMOptions, ArgJVMMS, ArgJVMMX: string;
+  // Progress page
+  AppProgressPage: TOutputProgressWizardPage;
+  // WMI support
+  WMIService: variant;
+  // List of running services for restarting
+  RunningServices: TServiceList;
+
 
 function OpenSCManager(lpMachineName: string; lpDatabaseName: string; dwDesiredAccess: DWORD): TSCHandle;
   external 'OpenSCManagerW@advapi32.dll stdcall';
@@ -237,6 +268,19 @@ function QueryServiceStatus(hService: TSCHandle; out lpServiceStatus: TServiceSt
 function CloseServiceHandle(hSCObject: TSCHandle): BOOL;
   external 'CloseServiceHandle@advapi32.dll stdcall';
 
+// Returns whether a parameter is on command line (not case-sensitive)
+function ParamStrExists(const Param: string): boolean;
+  var
+    I: integer;
+  begin
+  result := false;
+  for I := 1 to ParamCount do
+    begin
+    result := CompareText(Param, ParamStr(I)) = 0;
+    if result then exit;
+    end;
+  end;
+  
 // Get whether service exists
 // Acknowledgment: TLama (https://stackoverflow.com/questions/32463808/)
 function ServiceExists(ServiceName: string): boolean;
@@ -543,6 +587,8 @@ function RemoveWhitespace(S: string): string;
   end;
 
 function InitializeSetup(): boolean;
+  var
+    SWbemLocator: variant;
   begin
   result := true;
   // Instance name
@@ -576,6 +622,14 @@ function InitializeSetup(): boolean;
   // Memory settings
   ArgJVMMS := Trim(ExpandConstant('{param:jvmms|{#DefaultJVMMS}}'));
   ArgJVMMX := Trim(ExpandConstant('{param:jvmmx|{#DefaultJVMMX}}'));
+  // Initialize WMI
+  try
+    SWbemLocator := CreateOleObject('WbemScripting.SWbemLocator');
+    WMIService := SWbemLocator.ConnectServer('', 'root\CIMV2');
+  except
+    WMIService := Null();
+  end; //try
+  SetArrayLength(RunningServices, 0);
   end;
 
 procedure InitializeWizard();
@@ -598,21 +652,224 @@ procedure InitializeWizard();
   ServicePage.Values[4] := ArgJVMMS;
   ServicePage.Add(CustomMessage('ServicePageServiceJVMMXItemCaption'), false);
   ServicePage.Values[5] := ArgJVMMX;
+  AppProgressPage := CreateOutputProgressPage(SetupMessage(msgWizardInstalling),
+    FmtMessage(CustomMessage('AppProgressPageInstallingCaption'), [ExpandConstant('{#SetupSetting("AppName")}')]));
   end;
 
 function ShouldSkipPage(PageID: integer): boolean;
   begin
-  // Skip service configuration page if not installing service
   result := false;
   if PageID = ServicePage.ID then
-    result := not WizardIsTaskSelected('installservice');
+    // Skip service configuration page if not installing service
+    result := not WizardIsTaskSelected('installservice')
+  else if PageID = JVMPage.ID then
+    // Skip JVM page if service already exists
+    result := ServiceExists(GetServiceName(''));
+  end;
+
+function ArrayContainsString(var Arr: TArrayOfString; const Item: string): boolean;
+  var
+    I: integer;
+  begin
+  result := false;
+  for I := 0 to GetArrayLength(Arr) - 1 do
+    begin
+    result := CompareText(Arr[I], Item) = 0;
+    if result then exit;
+    end;
+  end;
+
+function GetAppDir(): string;
+  begin
+  result := ExpandConstant('{app}');
+  end;
+
+function GetRunningServices(AppDir: string; var Services: TServiceList): integer;
+  var
+    WQLQuery: string;
+    SWbemObjectSet, SWbemObject: variant;
+    I: integer;
+  begin
+  result := 0;
+  AppDir := AddBackslash(AppDir);
+  StringChangeEx(AppDir, '\', '\\', true);
+  WQLQuery := Format('SELECT DisplayName,Name,PathName,ProcessId FROM Win32_Service'
+    + ' WHERE (PathName LIKE ''"%s%%'') AND (State <> "Stopped")', [AppDir]);
+  try
+    SWbemObjectSet := WMIService.ExecQuery(WQLQuery);
+    if (not VarIsNull(SWbemObjectSet)) and (SWbemObjectSet.Count > 0) then
+      begin
+      SetArrayLength(Services, SWbemObjectSet.Count);
+      for I := 0 to SWbemObjectSet.Count - 1 do
+        begin
+        SWbemObject := SWbemObjectSet.ItemIndex(I);
+        if not VarIsNull(SWbemObject) then
+          begin
+          Services[I].ProcessId := SWbemObject.ProcessId;
+          Services[I].Name := SWbemObject.Name;
+          Services[I].DisplayName := SWbemObject.DisplayName;
+          result := result + 1;
+          end
+        else
+          begin
+          Services[I].ProcessId := 0;
+          Services[I].Name := '';
+          Services[I].DisplayName := '';
+          end;
+        end;
+      end;
+  except
+    SetArrayLength(Services, 0);
+  end; //try
+  end;
+
+function GetRunningProcesses(AppDir: string; var Processes: TProcessList): integer;
+  var
+    WQLQuery: string;
+    SWbemObjectSet, SWbemObject: variant;
+    I: integer;
+  begin
+  result := 0;
+  AppDir := AddBackslash(AppDir);
+  StringChangeEx(AppDir, '\', '\\', true);
+  WQLQuery := Format('SELECT ExecutablePath,Name,ProcessId FROM Win32_Process'
+    + ' WHERE ExecutablePath LIKE "%s%%"', [AppDir]);
+  try
+    SWbemObjectSet := WMIService.ExecQuery(WQLQuery);
+    if (not VarIsNull(SWbemObjectSet)) and (SWbemObjectSet.Count > 0) then
+      begin
+      SetArrayLength(Processes, SWbemObjectSet.Count);
+      for I := 0 to SWbemObjectSet.Count - 1 do
+        begin
+        SWbemObject := SWbemObjectSet.ItemIndex(I);
+        if not VarIsNull(SWbemObject) then
+          begin
+          Processes[I].ProcessId := SWbemObject.ProcessId;
+          Processes[I].Name := SWbemObject.Name;
+          Processes[I].ExecutablePath := SWbemObject.ExecutablePath;
+          result := result + 1;
+          end
+        else
+          begin
+          Processes[I].ProcessId := 0;
+          Processes[I].Name := '';
+          Processes[I].ExecutablePath := '';
+          end;
+        end;
+      end;
+  except
+    SetArrayLength(Processes, 0);
+  end; //try
+  end;
+
+function GetRunningProcessList(AppDir: string): string;
+  var
+    ServiceCount, ProcessCount, I, J, MaxOutput: integer;
+    Services: TServiceList;
+    Processes: TProcessList;
+    Output: TArrayOfString;
+  begin
+  result := '';
+  ServiceCount := GetRunningServices(AppDir, Services);
+  ProcessCount := GetRunningProcesses(AppDir, Processes);
+  if ServiceCount + ProcessCount = 0 then exit;
+  SetArrayLength(Output, ServiceCount + ProcessCount);
+  for I := 0 to ServiceCount - 1 do
+    Output[I] := Services[I].DisplayName;
+  J := I;
+  for I := 0 to ProcessCount - 1 do
+    if not ArrayContainsString(Output, Processes[I].Name) then
+      begin
+      Output[J] := Processes[I].Name;
+      J := J + 1;
+      end;
+  MaxOutput := 20;
+  if GetArrayLength(Output) >= MaxOutput then
+    begin
+    J := MaxOutput;
+    Output[MaxOutput - 1] := '...';
+    end
+  else
+    J := GetArrayLength(Output);
+  for I := 0 to J - 1 do
+    if Output[I] <> '' then
+      if result = '' then
+        result := Output[I]
+      else
+        result := result + #10 + Output[I];
+  end;
+
+function StopRunningServices(AppDir: string): boolean;
+  var
+    Count, I, ResultCode: integer;
+    Services: TServiceList;
+    Command, Parameters: string;
+  begin
+  result := false;
+  Count := GetRunningServices(AppDir, Services);
+  if Count > 0 then
+    begin
+    Command := ExpandConstant('{sys}\net.exe');
+    for I := 0 to Count - 1 do
+      begin
+      Parameters := Format('stop "%s"', [Services[I].Name]);
+      Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
+      Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      end;
+    result := GetRunningServices(AppDir, Services) = 0;
+    end;
+  end;
+
+function TerminateRunningProcesses(AppDir: string): boolean;
+  var
+    Count, I, ResultCode: integer;
+    Processes: TProcessList;
+    Command, Parameters: string;
+  begin
+  result := false;
+  Count := GetRunningProcesses(AppDir, Processes);
+  if Count > 0 then
+    begin
+    Command := ExpandConstant('{sys}\taskkill.exe');
+    Parameters := ' ';
+    for I := 0 to Count - 1 do
+      Parameters := Parameters + Format('/PID %d ', [Processes[I].ProcessId]);
+    Parameters := Parameters + '/F';
+    Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
+    Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    result := GetRunningProcesses(AppDir, Processes) = 0;
+    end;
+  end;
+
+function StartServices(var Services: TServiceList): boolean;
+  var
+    Count, I, NumStarted, ResultCode: integer;
+    Command, Parameters: string;
+  begin
+  result := false;
+  Count := GetArrayLength(Services);
+  if Count > 0 then
+    begin
+    Command := ExpandConstant('{sys}\net.exe');
+    NumStarted := 0;
+    for I := 0 to Count - 1 do
+      begin
+      Parameters := Format('start "%s"', [Services[I].Name]);
+      Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
+      if Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+        NumStarted := NumStarted + 1;
+      end;
+    result := NumStarted = Count;
+    end;
   end;
 
 function NextButtonClick(CurPageID: integer): boolean;
   var
-    I, ID, Value: integer;
+    I, ID, Value, Count: integer;
     ControlValues: TArrayOfString;
     Controls: TArrayOfInteger;
+    ProcList: string;
+    Processes: TProcessList;
   begin
   result := true;
   if CurPageID = JVMPage.ID then
@@ -736,6 +993,54 @@ function NextButtonClick(CurPageID: integer): boolean;
     ArgJVMOptions := Trim(ServicePage.Values[3]);
     ArgJVMMS := Trim(ServicePage.Values[4]);
     ArgJVMMX := Trim(ServicePage.Values[5]);
+    end
+  else if CurPageID = wpReady then
+    begin
+    ProcList := GetRunningProcessList(GetAppDir());
+    result := ProcList = '';
+    if not result then
+      begin
+      Log(CustomMessage('ApplicationsRunningLogMessage'));
+      // Don't prompt if command line parameters present
+      result := ParamStrExists('/closeapplications') or ParamStrExists('/forcecloseapplications');
+      if not result then
+        result := SuppressibleTaskDialogMsgBox(CustomMessage('ApplicationsRunningInstructionMessage'),
+          FmtMessage(CustomMessage('ApplicationsRunningTextMessage'),[ProcList]),
+          mbCriticalError,
+          MB_YESNO, [CustomMessage('CloseApplicationsMessage'),CustomMessage('DontCloseApplicationsMessage')],
+          0,
+          IDNO) = IDYES;
+      if result then
+        begin
+        AppProgressPage.SetText(CustomMessage('AppProgressPageStoppingMessage'), '');
+        AppProgressPage.SetProgress(0, 0);
+        AppProgressPage.Show();
+        try
+          AppProgressPage.SetProgress(1, 3);
+          // Cache running service(s) in global variable for later restart
+          Count := GetRunningServices(GetAppDir(), RunningServices);
+          result := (Count = 0) or (StopRunningServices(GetAppDir()));
+          AppProgressPage.SetProgress(2, 3);
+          if result then
+            begin
+            Count := GetRunningProcesses(GetAppDir(), Processes);
+            result := (Count = 0) or (TerminateRunningProcesses(GetAppDir()));
+            end;
+          AppProgressPage.SetProgress(3, 3);
+          if result then
+            Log(CustomMessage('ClosedApplicationsMessage'))
+          else
+            begin
+            Log(SetupMessage(msgErrorCloseApplications));
+            SuppressibleMsgBox(SetupMessage(msgErrorCloseApplications), mbCriticalError, MB_OK, IDOK);
+            end;
+        finally
+          AppProgressPage.Hide();
+        end; //try
+        end
+      else
+        Log(CustomMessage('ApplicationsStillRunningMessage'));
+      end;
     end;
   end;
 
@@ -781,11 +1086,14 @@ function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
       S := S + NewLine + NewLine;
     S := S + MemoTasksInfo;
     end;
-  // List path of jvm.dll file
-  if S <> '' then
-    S := S + NewLine + NewLine;
-  S := S + CustomMessage('ReadyMemoJVMPathInfo') + NewLine
-    + Space + ArgJVMPath;
+  // List path of jvm.dll file if service not already installed
+  if not ServiceExists(GetServiceName('')) then
+    begin
+    if S <> '' then
+      S := S + NewLine + NewLine;
+    S := S + CustomMessage('ReadyMemoJVMPathInfo') + NewLine
+      + Space + ArgJVMPath;
+    end;
   // If installing service, list service configuration information
   if WizardIsTaskSelected('installservice') then
     begin
@@ -871,5 +1179,19 @@ procedure CurStepChanged(CurStep: TSetupStep);
     begin
     if WizardIsTaskSelected('installservice') then
       InstallService();
+    if GetArrayLength(RunningServices) > 0 then
+      begin
+      AppProgressPage.SetText(CustomMessage('AppProgressPageStartingMessage'), '');
+      AppProgressPage.SetProgress(0, 0);
+      AppProgressPage.Show();
+      try
+        AppProgressPage.SetProgress(1, 2);
+        if StartServices(RunningServices) then
+          Log(CustomMessage('StartedServicesMessage'));
+        AppProgressPage.SetProgress(2, 2);
+      finally
+        AppProgressPage.Hide();
+      end; //try
+      end;
     end;
   end;

@@ -10,7 +10,7 @@
 #define AppPatchVersion ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "ApacheTomcat", "Patch", "0")
 #define AppFullVersion AppMajorVersion + "." + AppMinorVersion + "." + AppPatchVersion
 #define SetupAuthor ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "Setup", "Author")
-#define SetupVersion ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "Setup", "Version", "0.0.0.0")
+#define SetupVersion AppFullVersion + ".0"
 #define AppUpdatesURL ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "Setup", "URL")
 #define RootDir "apache-tomcat-" + AppFullVersion
 #define SetupName RootDir + "-setup"

@@ -8,7 +8,7 @@
 
 ## Get the Downloads
 
-Download the Apache Tomcat zip files for the appropriate version of Apache Tomcat. For example, the zip files for Apache Tomcat 9.0.30 are `apache-tomcat-9.0.30-windows-x64.zip` and `apache-tomcat-9.0.30-windows-x86.zip`. Copy these zip files into the build directory.
+Download the Apache Tomcat zip files for the appropriate version of Apache Tomcat. For example, the zip files for Apache Tomcat 9.0.30 are `apache-tomcat-9.0.41-windows-x64.zip` and `apache-tomcat-9.0.41-windows-x86.zip`. Copy these zip files into the build directory.
 
 ## Extract the Archives
 
@@ -23,14 +23,13 @@ Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the ma
     Publisher=Apache Software Foundation
     Major=9
     Minor=0
-    Patch=30
+    Patch=41
 
     [Setup]
     Author=Bill Stewart
-    Version=1.0.0.3
     URL=https://github.com/Bill-Stewart/ApacheTomcatSetup
 
-The `Version` line specifies the version number for the Setup program itself.
+The version number of the setup executable will match the version number of Tomcat being installed, with a trailing ".0" appended. (For example, if the Tomcat version is 9.0.41, the version number of the setup executable will be 9.0.41.0).
 
 ## Compile the Inno Setup Script
 

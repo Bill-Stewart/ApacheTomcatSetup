@@ -66,7 +66,8 @@ Please note the following when using Setup to reinstall or upgrade Apache Tomcat
 `/noicons`                        | Prevents creation of a Start Menu group.
 `/tasks="`_tasklist_`"`           | Specifies the tasks Setup should perform. See [Setup Tasks](#setup-tasks).
 `/jvmpath="`_location_`"`         | Specifies the path and filename of the `jvm.dll` file. See [Finding the jvm.dll File](#finding-the-jvmdll-file).
-`/silent`                         | Runs Setup silently (i.e., without user interaction).
+`/silent`                         | Runs Setup silently (i.e., without user interaction). For a fully hands-free installation when upgrading, it is recommended to also specify the `/closeapplications` parameter (see below).
+`/closeapplications`              | Setup should automatically stop running services and applications before installing and restart services after installation. (If you omit this parameter and one or more Tomcat services and/or applications are running, Setup will prompt interactively to close them before continuing.)
 `/log="`_filename_`"`             | Logs Setup activity to the specified file. The default is not to create a log file.
 
 ## Windows Service Installation Command Line Parameters
@@ -119,12 +120,12 @@ Setup's **Select Components** page allows selection of the setup type and compon
 
 The setup _type_ corresponds to the drop-down list on the **Select Components** page. Changing the drop-down list selection changes the selected components. The types are as follows:
 
-| Type                | Name       | Components Selected
-| ----                | ----       | -------------------
-Default installation  | `default`  | `core,webapps/docs,webapps/manager`
-Core only             | `core`     | `core`
-Full installation     | `full`     | Selects all components
-Custom installation   | `custom`   | Selects a custom list of components
+| Type               | Name      | Components Selected
+| ----               | ----      | -------------------
+Default installation | `default` | `core,webapps/docs,webapps/manager`
+Core only            | `core`    | `core`
+Full installation    | `full`    | Selects all components
+Custom installation  | `custom`  | Selects a custom list of components
 
 The `/type` command line parameter specifies a default setup type; e.g. `/type=core` specifies that **Core only** should be the default type.
 
@@ -132,14 +133,14 @@ The default is `/type=default`.
 
 The _components_ correspond to the checkboxes that represent individual components. The components are as follows:
 
-| Component              | Name                   | Notes
-| ---------              | ----                   | -----
-Apache Tomcat core       | `core`                 | Always selected
-Web applications         | `webapps`              | Can't be selected alone
-Documentation bundle     | `webapps/docs`         |
-Manager application      | `webapps/manager`      |
-Host Manager application | `webapps/hostmanager`
-Examples                 | `webapps/examples`
+| Component              | Name                  | Notes
+| ---------              | ----                  | -----
+Apache Tomcat core       | `core`                | Always selected
+Web applications         | `webapps`             | Can't be selected alone
+Documentation bundle     | `webapps/docs`        |
+Manager application      | `webapps/manager`     |
+Host Manager application | `webapps/hostmanager` |
+Examples                 | `webapps/examples`    |
 
 The `core` component consists of the Apache Tomcat binaries and `jar` files.
 
@@ -151,13 +152,13 @@ The default is `/components="core,webapps/docs,webapps/manager"`.
 
 Setup's **Select Additional Tasks** page provides a list of additional tasks that Setup should perform:
 
-Task                                                  | Name                                  | Notes
-----                                                  | ----                                  | -----
-Install Windows service                               | `installservice`
-Set file system permissions for service user account  | `installservice/setpermissions`       | See [Setting File System Permissions](#setting-file-system-permissions)
-Automatically start service when computer starts      | `installservice/setautostart`
-Create shortcut to start the service monitor at logon | `installservice/startmonitoratlogon`
-Back up conf directory before installation            | `backupconf`                          | See [Backing Up the `conf` Directory](#backing-up-the-conf-directory)
+Task                                                  | Name                                 | Notes
+----                                                  | ----                                 | -----
+Install Windows service                               | `installservice`                     |
+Set file system permissions for service user account  | `installservice/setpermissions`      | See [Setting File System Permissions](#setting-file-system-permissions)
+Automatically start service when computer starts      | `installservice/setautostart`        |
+Create shortcut to start the service monitor at logon | `installservice/startmonitoratlogon` |
+Back up conf directory before installation            | `backupconf`                         | See [Backing Up the `conf` Directory](#backing-up-the-conf-directory)
 
 The `/tasks` parameter specifies which tasks are selected by default. Specifying an `installservice` subtask implies the `installservice` task (that is, `/tasks="installservice/setautostart"` is equivalent to `/tasks="installservice,installservice/setautostart"`).
 
@@ -208,9 +209,11 @@ See the [Inno Setup](https://www.jrsoftware.org/isinfo.php) documentation for mo
 
 # Setup Limitations
 
-* Setup doesn't provide a way to configure server port (`server.xml`) or Manager web application (`tomcat-users.xml`) details.
+* Setup doesn't provide a way to configure server port (`server.xml`) or Manager web application (`tomcat-users.xml`) details (these items must be configured separately after installation).
 
 * Setup does not provide the ability to uninstall an upgrade (i.e., downgrade). To downgrade, you must first uninstall the current version and then install the desired version. For this reason, it is recommended to keep the Setup programs of previous versions available just in case.
+
+* Setup uses WMI (Windows Management Instrumentation) API calls to detect running services and applications. If you have stopped or disabled the WMI service (not recommended), Setup will not be able to detect running services and applications and will attempt to replace files that are in use. The only workaround in this case is to manually stop running Tomcat services and/or applications before reinstalling or upgrading.
 
 # Sample Command Line Parameters
 
@@ -218,7 +221,8 @@ See the [Inno Setup](https://www.jrsoftware.org/isinfo.php) documentation for mo
     /serviceusername="FABRIKAM\AppService"
     /jvmoptions="-Djavax.net.ssl.trustStoreType=WINDOWS-ROOT"
     /silent
-    /log="C:\Users\KenDyer\Documents\setup.log"
+    /closeapplications
+    /log="C:\Users\KenDyer\Documents\ApacheTomcatSetup.log"
 
 (All on one line)
 
