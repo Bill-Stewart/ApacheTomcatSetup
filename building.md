@@ -16,7 +16,7 @@ Run the `Expand-TomcatArchive.ps1` script in the build directory. The script use
 
 ## Update `appinfo.ini`
 
-Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the matching version of Apache Tomcat you want to build. For example, to build version `9.0.30`, the lines in `appinfo.ini` are:
+Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the matching version of Apache Tomcat you want to build. For example, to build version `9.0.41`, the lines in `appinfo.ini` are:
 
     [ApacheTomcat]
     Name=Apache Tomcat
@@ -25,11 +25,16 @@ Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the ma
     Minor=0
     Patch=41
 
+    [Java]
+    MinVersion=8
+
     [Setup]
     Author=Bill Stewart
     URL=https://github.com/Bill-Stewart/ApacheTomcatSetup
 
 The version number of the setup executable will match the version number of Tomcat being installed, with a trailing ".0" appended. (For example, if the Tomcat version is 9.0.41, the version number of the setup executable will be 9.0.41.0).
+
+The `[Java]` section's `MinVersion` directive specifies the minimum Java version required for the version of Tomcat you are installing as noted in the Tomcat release notes. If the `jvm.dll` file's major version is less than this number, Setup will not continue. For example, if you specify `MinVersion=15` and the `jvm.dll` file is version 11.0.9.1, Setup will inform the user that the Java version (based on the file version resource in the `jvm.dll` file the user selected) is not new enough.
 
 ## Compile the Inno Setup Script
 

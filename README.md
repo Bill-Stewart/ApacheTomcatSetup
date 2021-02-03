@@ -9,6 +9,7 @@ This [Apache Tomcat](https://tomcat.apache.org/) installer (referred to herein a
 # Table of Contents
 
 - [Background](#background)
+- [Download](#download)
 - [Reinstalling or Upgrading](#reinstalling-or-upgrading)
 - [Setup Command Line Parameters](#setup-command-line-parameters)
   - [Common Command Line Parameters](#common-command-line-parameters)
@@ -40,6 +41,12 @@ I wrote this [Inno Setup](https://www.jrsoftware.org/isinfo.php) installer becau
 * The ASF installer doesn't set file system permissions for the service user account to actually be able to run any web applications because it doesn't have a way to specify the service user account name. This is a peculiar state of affairs when installing the Windows service: The service gets installed, but unless you run the service using the local system or an administrative account (not recommended), web applications won't work because the service user account doesn't have permission to write to the `logs`, `temp`, and `work` directories.
 
 This custom Apache Tomcat Setup installer rectifies these limitations.
+
+# Download
+
+You can download the latest version from the Github Releases page:
+
+https://github.com/Bill-Stewart/ApacheTomcatSetup/releases/
 
 # Reinstalling or Upgrading
 
@@ -170,7 +177,7 @@ The `installservice/setpermissions` task grants file system permissions to the a
 
 * Apache Tomcat installation directory and subdirectories: Read-only
 
-* `logs`, `temp`, and `work` directories: Modify
+* `conf\Catalina\localhost`, `logs`, `temp`, and `work` directories: Modify
 
 Web applications can start successfully with these minimum permissions.
 
@@ -184,15 +191,23 @@ The `backupconf` task makes a backup copy of the `conf` directory if it exists (
 
 # Finding the jvm.dll File
 
-Apache Tomcat requires a Java Virtual Machine (JVM), so Setup needs to know the location of the `jvm.dll` file. Setup attempts to find it automatically in the following ways:
+Apache Tomcat requires a Java Virtual Machine (JVM), so Setup needs to know the location of the `jvm.dll` file if you are installing the service. Setup attempts to find it automatically in the following ways:
 
-1. Setup searches the `JavaSoft` registry subkeys, if they exist, to find the `RuntimeLib` value (this value should contain the path to the `jvm.dll` file).
+1. It checks for the presence of the `JAVA_HOME`, `JDK_HOME`, and `JRE_HOME` environment variables (in that order). The value of the environment variable is the Java home directory.
 
-2. Setup searches the directory named in the `JAVA_HOME` or `JRE_HOME` environment variable for the `jvm.dll` file.
+2. If the environment variables noted above are not defined, Setup searches the directories named in the `Path` environment variable for `java.exe`. The Java home directory is the parent directory of the directory where `java.exe` is found. For example, if `C:\Program Files\AdoptOpenJDK\JRE11\bin` is in the path (and `java.exe` is in that directory), the Java home directory is `C:\Program Files\AdoptOpenJDK\JRE11`.
 
-If you have a Java runtime installed and Setup fails to find it, you must specify the path to the `jvm.dll` file on the **Select Java Virtual Machine** page or by using the `/jvmpath` command line parameter.
+3. If `java.exe` is not found in the `Path`, Setup searches in the registry for the home directory of the latest Java version installed.
 
-Setup installs the 64-bit Apache Tomcat binaries if the `jvm.dll` file is 64-bit; otherwise Setup installs the 32-bit Apache Tomcat binaries.
+> NOTE: If you are running on a 64-bit version of Windows, Setup won't search the 32-bit portion of the registry if it finds any 64-bit versions of Java in the registry. This only applies to the registry search; if Setup finds a 32-bit installation of Java in the environment variables or `Path`, it will not search the registry.
+
+If any of the above attempts to find the Java home directory succeed (in the above order), Setup appends `\bin\server\jvm.dll` to the Java home directory and uses the result as the path to the `jvm.dll` file.
+
+If you have Java installed but Setup fails to find it, you must specify the path to the `jvm.dll` file on the **Select Java Virtual Machine** page or by using the `/jvmpath` command line parameter.
+
+Setup installs the 64-bit Apache Tomcat binaries if the `jvm.dll` file is 64-bit; otherwise, it installs the 32-bit Apache Tomcat binaries.
+
+The file version of `jvm.dll` must be at least the minimum version required by the version of Tomcat you are installing. If the `jvm.dll` file version is older than the minimum version required by the version of Tomcat you are installing, Setup will not continue.
 
 # Uninstalling Apache Tomcat
 

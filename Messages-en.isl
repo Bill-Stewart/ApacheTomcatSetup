@@ -46,7 +46,10 @@ RunSetPermissionsStatusMsg=Setting file system permissions...
 RunPostInstallServiceConfigureDescription=Configure {#AppName} Service
 
 ; ReadyMemo info
-ReadyMemoJVMPathInfo=Java Virtual Machine (jvm.dll path):
+ReadyMemoJVMInfo=Java Virtual Machine:
+ReadyMemoJVMPath=Path:
+ReadyMemoJVMVersion=File version:
+ReadyMemoJVMPlatform=Platform:
 ReadyMemoServiceConfigInfo=Service configuration options:
 ReadyMemoServiceNameInfo=Service name:
 ReadyMemoServiceDisplayNameInfo=Service display name:
@@ -58,7 +61,7 @@ ReadyMemoServiceJVMMXInfo=Maximum memory pool size:
 ; JVM page
 JVMPageCaption=Select Java Virtual Machine
 JVMPageDescription=Which Java Virtual Machine (JVM) do you want {#AppName} to use?
-JVMPageSubCaption={#AppName} requires a Java Virtual Machine (JVM). Specify the path to the jvm.dll file, then click Next.
+JVMPageSubCaption={#AppName} service installation requires a Java Virtual Machine (JVM). Specify the path to the jvm.dll file, then click Next.
 JVMPagePathItemCaption=&Path to jvm.dll file (required):
 
 ; Service configuration page
@@ -78,6 +81,7 @@ ServiceInstallCommandSucceededLogMessage=INFO: Service installation command exec
 
 ; Installation
 JVMPathLogMessage=INFO: JVM path - "%1"
+JVMVersionLogMessage=INFO: jvm.dll file version - %1
 JVMImageTypeLogMessage=INFO: jvm.dll image type - %1 (if unknown, assume 32-bit)
 
 ; Running application/service messages
@@ -98,9 +102,11 @@ AppProgressPageStartingMessage=Restarting stopped services...
 
 ; Error messages
 ErrorJVMPathEmptyLogMessage=ERROR: Unable to find jvm.dll file
-ErrorJVMPathEmptyGUIMessage={#AppName} requires a Java Virtual Machine (JVM).%n%nYou must specify the path to the jvm.dll file in order to complete the installation.
+ErrorJVMPathEmptyGUIMessage={#AppName} service installation requires a Java Virtual Machine (JVM).%n%nYou must specify the path to the jvm.dll file in order to complete the installation.
 ErrorJVMPathFileNotFoundLogMessage=ERROR: The system cannot find the file specified - "%1"
 ErrorJVMPathFileNotFoundGUIMessage=The system cannot find the file specified.%n%nYou must specify the path to the jvm.dll file in order to complete the installation.
+ErrorJVMOldLogMessage=jvm.dll version %1 detected; must be at least version %2
+ErrorJVMOldGUIMessage=The selected jvm.dll file is version %1, but {#AppName} requires at least Java %2.%n%nYou must select a jvm.dll file that meets the minimum version requirement.
 ErrorServiceConfigValueMissingLogMessage=ERROR: No value specified for the "%1" Windows service configuration option
 ErrorServiceConfigValueMissingGUIMessage=Please specify a value.
 ErrorServiceConfigServiceAlreadyExistsLogMessage=The specified service already exists - "%1"

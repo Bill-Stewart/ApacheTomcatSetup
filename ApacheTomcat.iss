@@ -40,7 +40,7 @@
 ;   installed
 ; * Add comparetimestamp flag to *.jar files install
 ;
-; 9.0.41.0
+; 9.0.41.0 (2020-12-14)
 ; * Follow Tomcat version numbering (with trailing ".0") to make it easier to
 ;   check setup executable for version number of Tomcat it installs
 ; * Replace Windows Restart Manager with custom WMI for automatic
@@ -50,6 +50,15 @@
 ; * MinVersion set to 6.1sp1 (security protection against potential DLL
 ;   preloading attacks)
 ; * Fix: Skip JVM page and info on ready page if service already installed
+;
+; 9.0.43.0 (2021-02-03)
+; * Fix: "Internal error: Expression error" on reinstall or upgrade
+; * Fix: "CreateProcess failed" error if "configure service" selected
+; * Replace code search of jvm.dll with JavaInfo.dll functions
+; * Add jvm.dll file version and platform to ready memo page
+; * Add: Validate minimum Java version
+; * Change/fix: jvm.dll path only required/used if installing service
+; * Fix: create {app}\conf\Catalina\localhost directory at install
 
 #include AddBackslash(SourcePath) + "includes.iss"
 
@@ -115,6 +124,8 @@ Name: webapps/examples;    Description: "{cm:ComponentsWebAppsExamplesDescriptio
 Type: files; Name: "{app}\lib\ecj-*.*.jar"; Components: core
 
 [Files]
+; Javainfo.dll
+Source: "JavaInfo.dll"; Flags: dontcopy
 ; README
 Source: "README.md"; DestDir: "{app}"; DestName: "README-Setup.md"
 ; Icon file
@@ -126,15 +137,15 @@ Source: "{#RootDir}\bin\*.bat"; DestDir: "{app}\bin"; Flags: comparetimestamp
 ; bin - jar files
 Source: "{#RootDir}\bin\*.jar"; DestDir: "{app}\bin"; Flags: comparetimestamp
 ; bin - xml files
-Source: "{#RootDir}\bin\*.xml"; DestDir: "{app}\bin"; Flags: comparetimestamp 
+Source: "{#RootDir}\bin\*.xml"; DestDir: "{app}\bin"; Flags: comparetimestamp
 ; bin - Windows binaries - x64
-Source: "{#RootDir}\bin\tcnative-1.dll.x64";                DestDir: "{app}\bin"; DestName: "tcnative-1.dll"; Flags: ignoreversion; Check: IsJVM64Bit
-Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}.exe.x64";  DestDir: "{app}\bin"; DestName: "tomcat.exe";     Flags: ignoreversion; Check: IsJVM64Bit
-Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}w.exe.x64"; DestDir: "{app}\bin"; DestName: "tomcatw.exe";    Flags: ignoreversion; Check: IsJVM64Bit
+Source: "{#RootDir}\bin\tcnative-1.dll.x64";                DestDir: "{app}\bin"; DestName: "tcnative-1.dll"; Flags: ignoreversion; Check: IsJVM64Bit()
+Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}.exe.x64";  DestDir: "{app}\bin"; DestName: "tomcat.exe";     Flags: ignoreversion; Check: IsJVM64Bit()
+Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}w.exe.x64"; DestDir: "{app}\bin"; DestName: "tomcatw.exe";    Flags: ignoreversion; Check: IsJVM64Bit()
 ; bin - Windows binaries - x86
-Source: "{#RootDir}\bin\tcnative-1.dll.x86";                DestDir: "{app}\bin"; DestName: "tcnative-1.dll"; Flags: ignoreversion; Check: not IsJVM64Bit
-Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}.exe.x86";  DestDir: "{app}\bin"; DestName: "tomcat.exe";     Flags: ignoreversion; Check: not IsJVM64Bit
-Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}w.exe.x86"; DestDir: "{app}\bin"; DestName: "tomcatw.exe";    Flags: ignoreversion; Check: not IsJVM64Bit
+Source: "{#RootDir}\bin\tcnative-1.dll.x86";                DestDir: "{app}\bin"; DestName: "tcnative-1.dll"; Flags: ignoreversion; Check: not IsJVM64Bit()
+Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}.exe.x86";  DestDir: "{app}\bin"; DestName: "tomcat.exe";     Flags: ignoreversion; Check: not IsJVM64Bit()
+Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}w.exe.x86"; DestDir: "{app}\bin"; DestName: "tomcatw.exe";    Flags: ignoreversion; Check: not IsJVM64Bit()
 ; conf - make backup if task selected
 Source: "{app}\conf\*"; DestDir: "{app}\conf-backup-{code:GetDateString}"; Flags: external createallsubdirs recursesubdirs skipifsourcedoesntexist uninsneveruninstall; Tasks: backupconf
 ; conf
@@ -147,6 +158,7 @@ Source: "{#RootDir}\webapps\host-manager\*"; DestDir: "{app}\webapps\host-manage
 Source: "{#RootDir}\webapps\examples\*";     DestDir: "{app}\webapps\examples";     Flags: createallsubdirs recursesubdirs comparetimestamp; Components: webapps/examples
 
 [Dirs]
+Name: "{app}\conf\Catalina\localhost"
 ; Create webapps directory if none of webapps components selected
 Name: "{app}\webapps"; Components: (not webapps/docs) and (not webapps/manager) and (not webapps/hostmanager) and (not webapps/examples)
 
@@ -168,7 +180,7 @@ Root: HKA; Subkey: "{#RegistryRootPath}\Instances\{code:GetInstanceName}"; Flags
 ; Values
 Root: HKA; Subkey: "{#RegistryRootPath}\Instances\{code:GetInstanceName}"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}";                 Flags: uninsdeletevalue
 Root: HKA; Subkey: "{#RegistryRootPath}\Instances\{code:GetInstanceName}"; ValueType: string; ValueName: "Version";     ValueData: "{#AppFullVersion}";     Flags: uninsdeletevalue
-Root: HKA; Subkey: "{#RegistryRootPath}\Instances\{code:GetInstanceName}"; ValueType: string; ValueName: "ServiceName"; ValueData: "{code:GetServiceName}"; Flags: uninsdeletevalue; Tasks: installservice 
+Root: HKA; Subkey: "{#RegistryRootPath}\Instances\{code:GetInstanceName}"; ValueType: string; ValueName: "ServiceName"; ValueData: "{code:GetServiceName}"; Flags: uninsdeletevalue; Tasks: installservice
 
 [Tasks]
 ; Service install: Must be administrator, and service must not exist
@@ -183,12 +195,13 @@ Name: backupconf; GroupDescription: "{cm:TasksOtherGroupDescription}"; Descripti
 [Run]
 ; Grant service user read permission on installation directory
 Filename: "{sys}\icacls.exe"; Parameters: """{app}"" /grant ""{code:GetServiceUserName}:(OI)(CI)RX"" /T"; StatusMsg: "{cm:RunSetPermissionsStatusMsg}"; Flags: runhidden; Tasks: installservice/setpermissions
-; Grant service user modify permission on logs, temp, and work
+; Grant service user modify permission on conf\Catalina\localhost, logs, temp, and work
+Filename: "{sys}\icacls.exe"; Parameters: """{app}\Catalina\localhost"" /grant ""{code:GetServiceUserName}:(OI)(CI)M"" /T"; StatusMsg: "{cm:RunSetPermissionsStatusMsg}"; Flags: runhidden; Tasks: installservice/setpermissions
 Filename: "{sys}\icacls.exe"; Parameters: """{app}\logs"" /grant ""{code:GetServiceUserName}:(OI)(CI)M"" /T"; StatusMsg: "{cm:RunSetPermissionsStatusMsg}"; Flags: runhidden; Tasks: installservice/setpermissions
 Filename: "{sys}\icacls.exe"; Parameters: """{app}\temp"" /grant ""{code:GetServiceUserName}:(OI)(CI)M"" /T"; StatusMsg: "{cm:RunSetPermissionsStatusMsg}"; Flags: runhidden; Tasks: installservice/setpermissions
 Filename: "{sys}\icacls.exe"; Parameters: """{app}\work"" /grant ""{code:GetServiceUserName}:(OI)(CI)M"" /T"; StatusMsg: "{cm:RunSetPermissionsStatusMsg}"; Flags: runhidden; Tasks: installservice/setpermissions
 ; Configure service after installation (if selected)
-Filename: "{app}\bin\tomcatw.exe"; Parameters: """//ES//{code:GetServiceName}"""; Description: "{cm:RunPostInstallServiceConfigureDescription} '{code:GetServiceName}'"; Flags: nowait postinstall skipifsilent; Check: ServiceExists(ExpandConstant('{code:GetServiceName}'))
+Filename: "{app}\bin\tomcatw.exe"; Parameters: """//ES//{code:GetServiceName}"""; Description: "{cm:RunPostInstallServiceConfigureDescription} '{code:GetServiceName}'"; Flags: nowait postinstall runascurrentuser skipifsilent; Check: ServiceExists(ExpandConstant('{code:GetServiceName}'))
 
 [UninstallRun]
 Filename: "{app}\bin\tomcat.exe"; Parameters: """//DS//{code:GetServiceName}"" --LogPath ""{app}\logs"""; Flags: runhidden; Tasks: installservice; RunOnceId: removeservice
@@ -204,11 +217,11 @@ Filename: "{app}\bin\tomcat.exe"; Parameters: """//DS//{code:GetServiceName}"" -
   * Custom command line parameters populate fields in custom wizard pages
   * Support multiple installations (/instance parameter)
   * Test whether service exists
-  * Search for jvm.dll using registry/JAVA_HOME/JRE_HOME
-  * Get file image type
+  * Use JavaInfo.dll to get Java installation details
   * Validate service does not exist before attempting to install it
+  * Validate minimum Java version
   * Skip service config page if service install task not selected
-  * Add JVM install details to 'Ready to Install' page
+  * Add JVM details to 'Ready to Install' page
   * Service configuration at post-install stage if task selected
   * Use WMI to detect running services/executables
   * If user decides, stop service(s) and automatically restart
@@ -258,7 +271,16 @@ var
   // List of running services for restarting
   RunningServices: TServiceList;
 
+// Use JavaInfo.dll to detect Java installation details
+// Latest version available at https://github.com/Bill-Stewart/JavaInfo
+function DLLIsBinary64Bit(FileName: string; var Is64Bit: DWORD): DWORD;
+  external 'IsBinary64Bit@files:JavaInfo.dll stdcall setuponly';
+function DLLIsJavaInstalled(): DWORD;
+  external 'IsJavaInstalled@files:JavaInfo.dll stdcall setuponly';
+function DLLGetJavaHome(FileName: string; NumChars: DWORD): DWORD;
+  external 'GetJavaHome@files:JavaInfo.dll stdcall setuponly';
 
+// Windows service functions
 function OpenSCManager(lpMachineName: string; lpDatabaseName: string; dwDesiredAccess: DWORD): TSCHandle;
   external 'OpenSCManagerW@advapi32.dll stdcall';
 function OpenService(hSCManager: TSCHandle; lpServiceName: string; dwDesiredAccess: DWORD): TSCHandle;
@@ -280,7 +302,66 @@ function ParamStrExists(const Param: string): boolean;
     if result then exit;
     end;
   end;
-  
+
+// JavaInfo.dll function
+function IsBinary64Bit(FileName: String): boolean;
+  var
+    Is64Bit: DWORD;
+  begin
+  result := false;
+  if DLLIsBinary64Bit(FileName, Is64Bit) = 0 then
+    if Is64Bit = 1 then result := true;
+  end;
+
+// JavaInfo.dll function
+function IsJavaInstalled(): boolean;
+  begin
+  result := DLLIsJavaInstalled() = 1;
+  end;
+
+// JavaInfo.dll function
+function GetJavaHome(): string;
+  var
+    NumChars: DWORD;
+    OutStr: string;
+  begin
+  result := '';
+  NumChars := DLLGetJavaHome('', 0);
+  SetLength(OutStr, NumChars);
+  if DLLGetJavaHome(OutStr, NumChars) > 0 then
+    result := OutStr;
+  end;
+
+function IsJVM64Bit(): boolean;
+  begin
+  result := IsBinary64Bit(ArgJVMPath);
+  end;
+
+function GetJVMVersionString(): string;
+  var
+    Version: string;
+  begin
+  result := '';
+  if GetVersionNumbersString(ArgJVMPath, Version) then
+    result := Version;
+  end;
+
+// Returns true if major version of jvm.dll is >= MinVersion in appinfo.ini,
+// or false otherwise
+function IsJVMVersionOK(): boolean;
+  var
+    CurVersion, MinVersion: int64;
+    MinJavaVersion: word;
+  begin
+  result := false;
+  if GetPackedVersion(ArgJVMPath, CurVersion) then
+    begin
+    MinJavaVersion := StrToIntDef(ExpandConstant('{#MinJavaVersion}'), 0);
+    MinVersion := PackVersionComponents(MinJavaVersion, 0, 0, 0);
+    result := ComparePackedVersion(CurVersion, MinVersion) >= 0;
+    end;
+  end;
+
 // Get whether service exists
 // Acknowledgment: TLama (https://stackoverflow.com/questions/32463808/)
 function ServiceExists(ServiceName: string): boolean;
@@ -306,79 +387,13 @@ function ServiceExists(ServiceName: string): boolean;
     RaiseException('OpenSCManager failed: ' + SysErrorMessage(DLLGetLastError));
   end;
 
-// Support for GetImageType()
-function BufferToWord(const Buffer: string): word;
-  begin
-  result := ord(Buffer[1]);
-  end;
-
-// Support for GetImageType()
-function BufferToLongWord(const Buffer: string): longword;
-  begin
-  result := (ord(Buffer[2]) shl 16) + ord(Buffer[1]);
-  end;
-
-// Support for GetImageType()
-function ReadFromStream(Stream: TStream; Size: integer): longword;
-  var
-    Buffer: string;
-  begin
-  try
-    SetLength(Buffer, Size div 2);
-    Stream.ReadBuffer(Buffer, Size);
-    case Size of
-      2: result := BufferToWord(Buffer);
-      4: result := BufferToLongWord(Buffer);
-    end; //case
-  except
-    result := 0;
-  end; //try
-  end;
-
-// Gets EXE/DLL image type; returns:
-// * 0 for 32-bit image
-// * 1 for 64-bit image
-// * -1 for unknown type
-// Acknowledgment: TLama (https://stackoverflow.com/questions/19932165/)
-function GetImageType(const FileName: string): integer;
-  var
-    FileStream: TFileStream;
-    PEOffset: longword;
-    MagicNumber: word;
-  begin
-  result := -1;
-  FileStream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyNone);
-  try
-    FileStream.Position := $3C;
-    PEOffset := ReadFromStream(FileStream, SizeOf(PEOffset));
-    FileStream.Position := PEOffset + $18;
-    MagicNumber := ReadFromStream(FileStream, SizeOf(MagicNumber));
-    case MagicNumber of
-      $010B: result := 0; // 32-bit image
-      $020B: result := 1; // 64-bit image
-    end; //case
-  finally
-    FileStream.Free();
-  end; //try
-  end;
-
-// Is jvm.dll file 64-bit?
-function IsJVM64Bit(): boolean;
-  begin
-  result := GetImageType(ArgJVMPath) = 1;
-  end;
-
 // Get string representation of jvm.dll image type
 function GetJVMImageType(): string;
-  var
-    ImageType: integer;
   begin
-  ImageType := GetImageType(ArgJVMPath);
-  case ImageType of
-    -1: result := 'unknown';
-    0:  result := '32-bit';
-    1:  result := '64-bit';
-  end; //case
+  if IsJVM64Bit() then
+    result := '64-bit'
+  else
+    result := '32-bit';
   end;
 
 // Get installation instance name (see 'Scripted Constants' section in docs)
@@ -429,146 +444,17 @@ function DoesInstanceHaveService(): boolean;
   result := RegQueryStringValue(HKEY_LOCAL_MACHINE, ExpandConstant('{#RegistryRootPath}\Instances\') + ArgInstance, 'ServiceName', ServiceName) and (Trim(ServiceName) <> '');
   end;
 
-// Searches a subdirectory tree for a file by name
-// Acknowledgment: Martin Prikryl (https://stackoverflow.com/questions/37133947/)
-function FindFile(RootPath: string; FileName: string): string;
-  var
-    FindRec: TFindRec;
-    FilePath: string;
-  begin
-  if FindFirst(RemoveBackslashUnlessRoot(RootPath) + '\*', FindRec) then
-    try
-      repeat
-        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
-          begin
-          FilePath := RemoveBackslashUnlessRoot(RootPath) + '\' + FindRec.Name;
-          if FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0 then
-            begin
-            result := FindFile(FilePath, FileName);
-            if result <> '' then
-              exit;
-            end
-          else if CompareText(FindRec.Name, FileName) = 0 then
-            begin
-            result := FilePath;
-            exit;
-            end
-          else
-            result := '';
-          end;
-      until not FindNext(FindRec);
-    finally
-      FindClose(FindRec);
-    end; //try
-  end;
-
-// Compares two version number strings; returns:
-// -1 if V1 < V2, 0 if V1 = V2, or 1 if V1 > V2
-// Acknowledgment: Martin Prikryl (https://stackoverflow.com/questions/37825650/)
-function CompareVersions(V1, V2: string): integer;
-  var
-    P, N1, N2: integer;
-  begin
-  result := 0;
-  while (result = 0) and ((V1 <> '') or (V2 <> '')) do
-    begin
-    P := Pos('.', V1);
-    if P > 0 then
-      begin
-      N1 := StrToIntDef(Copy(V1, 1, P - 1), 0);
-      Delete(V1, 1, P);
-      end
-    else if V1 <> '' then
-      begin
-      N1 := StrToIntDef(V1, 0);
-      V1 := '';
-      end
-    else
-      N1 := 0;
-    P := Pos('.', V2);
-    if P > 0 then
-      begin
-      N2 := StrToIntDef(Copy(V2, 1, P - 1), 0);
-      Delete(V2, 1, P);
-      end
-    else if V2 <> '' then
-      begin
-      N2 := StrToIntDef(V2, 0);
-      V2 := '';
-      end
-    else
-      N2 := 0;
-    if N1 < N2 then
-      result := -1
-    else if N1 > N2 then
-      result := 1;
-    end;
-  end;
-
-// Tries to find jvm.dll
+// Returns filename of <javahome>\bin\server\jvm.dll if found
 function FindJVM(): string;
   var
-    StringList, SubkeyNames: TArrayOfString;
-    I, RootKey, J: integer;
-    SubkeyExists: boolean;
-    SubkeyName, LatestVersion, EnvHome: string;
+    FileName: string;
   begin
   result := '';
-  // Search registry for 'RuntimeLib' value in these locations
-  SetArrayLength(StringList, 2);
-  StringList[0] := 'SOFTWARE\JavaSoft\Java Runtime Environment';
-  StringList[1] := 'SOFTWARE\JavaSoft\JRE';
-  for I := 0 to GetArrayLength(StringList) - 1 do
+  if IsJavaInstalled() then
     begin
-    SubkeyExists := false;
-    SubkeyName := StringList[I];
-    if IsWin64() then
-      begin
-      SubkeyExists := RegKeyExists(HKEY_LOCAL_MACHINE_64, SubkeyName);
-      if SubkeyExists then
-        RootKey := HKEY_LOCAL_MACHINE_64
-      else
-        begin
-        SubkeyExists := RegKeyExists(HKEY_LOCAL_MACHINE_32, SubkeyName);
-        if SubkeyExists then
-          RootKey := HKEY_LOCAL_MACHINE_32;
-        end;
-      end
-    else
-      begin
-      SubkeyExists := RegKeyExists(HKEY_LOCAL_MACHINE, SubkeyName);
-      if SubkeyExists then
-        RootKey := HKEY_LOCAL_MACHINE;
-      end;
-    if SubkeyExists then
-      begin
-      LatestVersion := '0';
-      if RegGetSubkeyNames(RootKey, SubkeyName, SubkeyNames) then
-        begin
-        for J := 0 to GetArrayLength(SubkeyNames) - 1 do
-          begin
-          if CompareVersions(SubkeyNames[J], LatestVersion) > 0 then
-            LatestVersion := SubkeyNames[J];
-          end;
-        if RegQueryStringValue(RootKey, SubkeyName + '\' + LatestVersion, 'RuntimeLib', result) then
-          break;
-        end;
-      end;
-    end;
-  if result = '' then
-    begin
-    // Registry search failed; try environment variables
-    SetArrayLength(StringList, 2);
-    StringList[0] := 'JAVA_HOME';
-    StringList[1] := 'JRE_HOME';
-    for I := 0 to GetArrayLength(StringList) - 1 do
-      begin
-      EnvHome := Trim(RemoveBackslashUnlessRoot(GetEnv(StringList[I])));
-      if (EnvHome <> '') and DirExists(EnvHome) then
-        result := FindFile(EnvHome, 'jvm.dll');
-      if result <> '' then
-        break;
-      end;
+    FileName := GetJavaHome() + '\bin\server\jvm.dll';
+    if FileExists(FileName) then
+      result := FileName;
     end;
   end;
 
@@ -595,8 +481,8 @@ function InitializeSetup(): boolean;
   ArgInstance := Trim(ExpandConstant('{param:instance|{#DefaultInstance}}'));
   // JVM path (if unspecified, search)
   ArgJVMPath := Trim(ExpandConstant('{param:jvmpath}'));
-  if ArgJVMPath = '' then
-    ArgJVMPath := Trim(FindJVM());
+  If ArgJVMPath = '' then
+    ArgJVMPath := FindJVM();
   // Service name (if unspecified, default depends on instance name)
   ArgServiceName := Trim(ExpandConstant('{param:servicename}'));
   if ArgServiceName = '' then
@@ -639,7 +525,7 @@ procedure InitializeWizard();
   JVMPage.Add(CustomMessage('JVMPagePathItemCaption'), 'DLL files|*.dll', '');
   JVMPage.Values[0] := ArgJVMPath;
   // Add custom service configuration page
-  ServicePage := CreateInputQueryPage(JvmPage.ID, CustomMessage('ServicePageCaption'), CustomMessage('ServicePageDescription'), CustomMessage('ServicePageSubCaption'));
+  ServicePage := CreateInputQueryPage(JVMPage.ID, CustomMessage('ServicePageCaption'), CustomMessage('ServicePageDescription'), CustomMessage('ServicePageSubCaption'));
   ServicePage.Add(CustomMessage('ServicePageServiceNameItemCaption'), false);
   ServicePage.Values[0] := ArgServiceName;
   ServicePage.Add(CustomMessage('ServicePageServiceDisplayNameItemCaption'), false);
@@ -652,6 +538,7 @@ procedure InitializeWizard();
   ServicePage.Values[4] := ArgJVMMS;
   ServicePage.Add(CustomMessage('ServicePageServiceJVMMXItemCaption'), false);
   ServicePage.Values[5] := ArgJVMMX;
+  // Add custom progress page
   AppProgressPage := CreateOutputProgressPage(SetupMessage(msgWizardInstalling),
     FmtMessage(CustomMessage('AppProgressPageInstallingCaption'), [ExpandConstant('{#SetupSetting("AppName")}')]));
   end;
@@ -659,12 +546,16 @@ procedure InitializeWizard();
 function ShouldSkipPage(PageID: integer): boolean;
   begin
   result := false;
-  if PageID = ServicePage.ID then
+  if PageID = JVMPage.ID then
+    begin
+    // Skip JVM page if service already exists or we are not installing service
+    result := ServiceExists(GetServiceName('')) or (not WizardIsTaskSelected('installservice'));
+    end
+  else if PageID = ServicePage.ID then
+    begin
     // Skip service configuration page if not installing service
-    result := not WizardIsTaskSelected('installservice')
-  else if PageID = JVMPage.ID then
-    // Skip JVM page if service already exists
-    result := ServiceExists(GetServiceName(''));
+    result := not WizardIsTaskSelected('installservice');
+    end;
   end;
 
 function ArrayContainsString(var Arr: TArrayOfString; const Item: string): boolean;
@@ -684,6 +575,7 @@ function GetAppDir(): string;
   result := ExpandConstant('{app}');
   end;
 
+// Gets list of running services; returns number running
 function GetRunningServices(AppDir: string; var Services: TServiceList): integer;
   var
     WQLQuery: string;
@@ -723,6 +615,7 @@ function GetRunningServices(AppDir: string; var Services: TServiceList): integer
   end; //try
   end;
 
+// Gets list of running processes; returns number running
 function GetRunningProcesses(AppDir: string; var Processes: TProcessList): integer;
   var
     WQLQuery: string;
@@ -762,6 +655,7 @@ function GetRunningProcesses(AppDir: string; var Processes: TProcessList): integ
   end; //try
   end;
 
+// Builds a newline-delimited list of running services and processes for GUI
 function GetRunningProcessList(AppDir: string): string;
   var
     ServiceCount, ProcessCount, I, J, MaxOutput: integer;
@@ -799,6 +693,8 @@ function GetRunningProcessList(AppDir: string): string;
         result := result + #10 + Output[I];
   end;
 
+// Runs 'net stop <servicename>' for each running service; returns true if all
+// services successfully stopped
 function StopRunningServices(AppDir: string): boolean;
   var
     Count, I, ResultCode: integer;
@@ -820,6 +716,8 @@ function StopRunningServices(AppDir: string): boolean;
     end;
   end;
 
+// Runs 'taskkill /PID <n> [...] /F' for each running process; returns true if
+// all processes successfully stopped
 function TerminateRunningProcesses(AppDir: string): boolean;
   var
     Count, I, ResultCode: integer;
@@ -841,6 +739,8 @@ function TerminateRunningProcesses(AppDir: string): boolean;
     end;
   end;
 
+// Runs 'net start <servicename>' for services that were stopped; returns true
+// if all services were successfully started
 function StartServices(var Services: TServiceList): boolean;
   var
     Count, I, NumStarted, ResultCode: integer;
@@ -895,6 +795,19 @@ function NextButtonClick(CurPageID: integer): boolean;
       if not WizardSilent() then
         begin
         MsgBox(CustomMessage('ErrorJVMPathFileNotFoundGUIMessage'), mbError, MB_OK);
+        WizardForm.ActiveControl := JVMPage.Edits[0];
+        JVMPage.Edits[0].SelectAll();
+        end;
+      exit;
+      end;
+    // Validate minimum jvm.dll version
+    result := IsJVMVersionOK();
+    if not result then
+      begin
+      Log(FmtMessage(CustomMessage('ErrorJVMOldLogMessage'), [GetJVMVersionString(),ExpandConstant('{#MinJavaVersion}')]));
+      if not WizardSilent() then
+        begin
+        MsgBox(FmtMessage(CustomMessage('ErrorJVMOldGUIMessage'), [GetJVMVersionString(),ExpandConstant('{#MinJavaVersion}')]), mbError, MB_OK);
         WizardForm.ActiveControl := JVMPage.Edits[0];
         JVMPage.Edits[0].SelectAll();
         end;
@@ -1080,19 +993,21 @@ function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
       S := S + NewLine + NewLine;
     S := S + MemoGroupInfo;
     end;
+  // Show JVM info if installing service
+  if (not ServiceExists(GetServiceName(''))) and (WizardIsTaskSelected('installservice')) then
+    begin
+    if S <> '' then
+      S := S + NewLine + NewLine;
+    S := S + CustomMessage('ReadyMemoJVMInfo') + NewLine
+      + Space + CustomMessage('ReadyMemoJVMPath') + ' ' + ArgJVMPath + NewLine
+      + Space + CustomMessage('ReadyMemoJVMVersion') + ' ' + GetJVMVersionString() + NewLine
+      + Space + CustomMessage('ReadyMemoJVMPlatform') + ' ' + GetJVMImageType();
+    end;
   if MemoTasksInfo <> '' then
     begin
     if S <> '' then
       S := S + NewLine + NewLine;
     S := S + MemoTasksInfo;
-    end;
-  // List path of jvm.dll file if service not already installed
-  if not ServiceExists(GetServiceName('')) then
-    begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + CustomMessage('ReadyMemoJVMPathInfo') + NewLine
-      + Space + ArgJVMPath;
     end;
   // If installing service, list service configuration information
   if WizardIsTaskSelected('installservice') then
@@ -1172,8 +1087,12 @@ procedure CurStepChanged(CurStep: TSetupStep);
   begin
   if CurStep = ssInstall then
     begin
-    Log(FmtMessage(CustomMessage('JVMPathLogMessage'), [ArgJVMPath]));
-    Log(FmtMessage(CustomMessage('JVMImageTypeLogMessage'), [GetJVMImageType()]));
+    if ArgJVMPath <> '' then
+      begin
+      Log(FmtMessage(CustomMessage('JVMPathLogMessage'), [ArgJVMPath]));
+      Log(FmtMessage(CustomMessage('JVMVersionLogMessage'), [GetJVMVersionString()]));
+      Log(FmtMessage(CustomMessage('JVMImageTypeLogMessage'), [GetJVMImageType()]));
+      end;
     end
   else if CurStep = ssPostInstall then
     begin

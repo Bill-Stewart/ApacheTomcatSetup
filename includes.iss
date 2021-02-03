@@ -9,6 +9,7 @@
 #define AppMinorVersion ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "ApacheTomcat", "Minor", "0")
 #define AppPatchVersion ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "ApacheTomcat", "Patch", "0")
 #define AppFullVersion AppMajorVersion + "." + AppMinorVersion + "." + AppPatchVersion
+#define MinJavaVersion ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "Java", "MinVersion", "0")
 #define SetupAuthor ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "Setup", "Author")
 #define SetupVersion AppFullVersion + ".0"
 #define AppUpdatesURL ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "Setup", "URL")
