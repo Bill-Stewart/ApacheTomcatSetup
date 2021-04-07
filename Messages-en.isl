@@ -1,4 +1,4 @@
-#preproc ispp
+﻿#preproc ispp
 
 ; Bill Stewart's Apache Tomcat Setup - Inno Setup messages file
 
@@ -7,6 +7,7 @@
 [Messages]
 SetupWindowTitle={#SetupAuthor}'s %1 Setup [{#AppFullVersion}]
 WelcomeLabel1=Welcome to {#SetupAuthor}'s [name] Setup Wizard
+CannotContinue=Setup cannot continue. Click Back to try again, or Cancel to exit.
 FinishedHeadingLabel=Completing {#SetupAuthor}'s [name] Setup Wizard
 FinishedLabel=Setup has finished installing [name] on your computer.
 

@@ -59,6 +59,16 @@
 ; * Add: Validate minimum Java version
 ; * Change/fix: jvm.dll path only required/used if installing service
 ; * Fix: create {app}\conf\Catalina\localhost directory at install
+;
+; 9.0.45.0 (2021-04-07)
+; * Inno Setup preprocessor verify compiling on IS 6.x or newer
+; * Change/fix: Move running application check to PrepareToInstall() event
+;   function (more appropriate)
+; * Updated code formatting (readability)
+
+#if Ver < EncodeVer(6,0,0,0)
+  #error This script requires Inno Setup 6 or later
+#endif
 
 #include AddBackslash(SourcePath) + "includes.iss"
 
@@ -235,24 +245,24 @@ const
 type
   TSCHandle = THandle;
   TServiceStatus = record
-    dwServiceType:             DWORD;
-    dwCurrentState:            DWORD;
-    dwControlsAccepted:        DWORD;
-    dwWin32ExitCode:           DWORD;
-    dwServiceSpecificExitCode: DWORD;
-    dwCheckPoint:              DWORD;
-    dwWaitHint:                DWORD;
+      dwServiceType:             DWORD;
+      dwCurrentState:            DWORD;
+      dwControlsAccepted:        DWORD;
+      dwWin32ExitCode:           DWORD;
+      dwServiceSpecificExitCode: DWORD;
+      dwCheckPoint:              DWORD;
+      dwWaitHint:                DWORD;
     end;
   TService = record
-    ProcessId:      DWORD;
-    Name:           string;
-    DisplayName:    string;
+      ProcessId:      DWORD;
+      Name:           string;
+      DisplayName:    string;
     end;
   TServiceList = array of TService;
   TProcess = record
-    ProcessId:      DWORD;
-    Name:           string;
-    ExecutablePath: string;
+      ProcessId:      DWORD;
+      Name:           string;
+      ExecutablePath: string;
     end;
   TProcessList = array of TProcess;
 
@@ -271,15 +281,6 @@ var
   // List of running services for restarting
   RunningServices: TServiceList;
 
-// Use JavaInfo.dll to detect Java installation details
-// Latest version available at https://github.com/Bill-Stewart/JavaInfo
-function DLLIsBinary64Bit(FileName: string; var Is64Bit: DWORD): DWORD;
-  external 'IsBinary64Bit@files:JavaInfo.dll stdcall setuponly';
-function DLLIsJavaInstalled(): DWORD;
-  external 'IsJavaInstalled@files:JavaInfo.dll stdcall setuponly';
-function DLLGetJavaHome(FileName: string; NumChars: DWORD): DWORD;
-  external 'GetJavaHome@files:JavaInfo.dll stdcall setuponly';
-
 // Windows service functions
 function OpenSCManager(lpMachineName: string; lpDatabaseName: string; dwDesiredAccess: DWORD): TSCHandle;
   external 'OpenSCManagerW@advapi32.dll stdcall';
@@ -290,85 +291,94 @@ function QueryServiceStatus(hService: TSCHandle; out lpServiceStatus: TServiceSt
 function CloseServiceHandle(hSCObject: TSCHandle): BOOL;
   external 'CloseServiceHandle@advapi32.dll stdcall';
 
+// Use JavaInfo.dll to detect Java installation details
+// Latest version available at https://github.com/Bill-Stewart/JavaInfo
+function DLLIsBinary64Bit(FileName: string; var Is64Bit: DWORD): DWORD;
+  external 'IsBinary64Bit@files:JavaInfo.dll stdcall setuponly';
+function DLLIsJavaInstalled(): DWORD;
+  external 'IsJavaInstalled@files:JavaInfo.dll stdcall setuponly';
+function DLLGetJavaHome(FileName: string; NumChars: DWORD): DWORD;
+  external 'GetJavaHome@files:JavaInfo.dll stdcall setuponly';
+
 // Returns whether a parameter is on command line (not case-sensitive)
 function ParamStrExists(const Param: string): boolean;
-  var
-    I: integer;
-  begin
+var
+  I: integer;
+begin
   result := false;
   for I := 1 to ParamCount do
     begin
-    result := CompareText(Param, ParamStr(I)) = 0;
-    if result then exit;
+      result := CompareText(Param, ParamStr(I)) = 0;
+      if result then exit;
     end;
-  end;
+end;
 
-// JavaInfo.dll function
+// JavaInfo.dll function wrapper
 function IsBinary64Bit(FileName: String): boolean;
-  var
-    Is64Bit: DWORD;
-  begin
+var
+  Is64Bit: DWORD;
+begin
   result := false;
   if DLLIsBinary64Bit(FileName, Is64Bit) = 0 then
-    if Is64Bit = 1 then result := true;
-  end;
+    result := Is64Bit = 1;
+end;
 
-// JavaInfo.dll function
+// JavaInfo.dll function wrapper
 function IsJavaInstalled(): boolean;
-  begin
+begin
   result := DLLIsJavaInstalled() = 1;
-  end;
+end;
 
-// JavaInfo.dll function
+// JavaInfo.dll function wrapper
 function GetJavaHome(): string;
-  var
-    NumChars: DWORD;
-    OutStr: string;
-  begin
+var
+  NumChars: DWORD;
+  OutStr: string;
+begin
   result := '';
   NumChars := DLLGetJavaHome('', 0);
   SetLength(OutStr, NumChars);
   if DLLGetJavaHome(OutStr, NumChars) > 0 then
     result := OutStr;
-  end;
+end;
 
 function IsJVM64Bit(): boolean;
-  begin
+begin
   result := IsBinary64Bit(ArgJVMPath);
-  end;
+end;
 
 function GetJVMVersionString(): string;
-  var
-    Version: string;
-  begin
+var
+  Version: string;
+begin
   result := '';
   if GetVersionNumbersString(ArgJVMPath, Version) then
     result := Version;
-  end;
+end;
 
 // Returns true if major version of jvm.dll is >= MinVersion in appinfo.ini,
 // or false otherwise
 function IsJVMVersionOK(): boolean;
-  var
-    CurVersion, MinVersion: int64;
-    MinJavaVersion: word;
-  begin
+var
+  CurVersion, MinVersion: int64;
+  MinJavaVersion: word;
+begin
   result := false;
   if GetPackedVersion(ArgJVMPath, CurVersion) then
     begin
-    MinJavaVersion := StrToIntDef(ExpandConstant('{#MinJavaVersion}'), 0);
-    MinVersion := PackVersionComponents(MinJavaVersion, 0, 0, 0);
-    result := ComparePackedVersion(CurVersion, MinVersion) >= 0;
+      MinJavaVersion := StrToIntDef(ExpandConstant('{#MinJavaVersion}'), 0);
+      MinVersion := PackVersionComponents(MinJavaVersion, 0, 0, 0);
+      result := ComparePackedVersion(CurVersion, MinVersion) >= 0;
     end;
-  end;
+end;
 
 // Get whether service exists
 // Acknowledgment: TLama (https://stackoverflow.com/questions/32463808/)
 function ServiceExists(ServiceName: string): boolean;
-  var
-    Manager, Service: TSCHandle;
-    Status: TServiceStatus;
-  begin
+var
+  Manager, Service: TSCHandle;
+  Status: TServiceStatus;
+begin
   result := false;
   Manager := OpenSCManager('', '', SC_MANAGER_CONNECT);
   if Manager <> 0 then
@@ -385,121 +395,121 @@ function ServiceExists(ServiceName: string): boolean;
     end //try
   else
     RaiseException('OpenSCManager failed: ' + SysErrorMessage(DLLGetLastError));
-  end;
+end;
 
 // Get string representation of jvm.dll image type
 function GetJVMImageType(): string;
-  begin
+begin
   if IsJVM64Bit() then
     result := '64-bit'
   else
     result := '32-bit';
-  end;
+end;
 
 // Get installation instance name (see 'Scripted Constants' section in docs)
 function GetInstanceName(Param: string): string;
-  begin
+begin
   result := ArgInstance;
-  end;
+end;
 
 // Get AppId (see 'Scripted Constants' section in docs)
 function GetAppId(Param: string): string;
-  begin
+begin
   result := ExpandConstant('{{#AppGUID}-') + ArgInstance;
-  end;
+end;
 
 // Get AppName (see 'Scripted Constants' section in docs)
 function GetAppName(Param: string): string;
-  begin
+begin
   if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
     result := ExpandConstant('{#AppName}')
   else
     result := ExpandConstant('{#AppName} - ') + ArgInstance;
-  end;
+end;
 
 // Get string containing date/time (see 'Scripted Constants' section in docs)
 function GetDateString(Param: string): string;
-  begin
+begin
   result := GetDateTimeString('yyyymmddhhnnss', '-', '-');
-  end;
+end;
 
 // Get service name (see 'Scripted Constants' section in docs)
 function GetServiceName(Param: string): string;
-  begin
+begin
   result := ArgServiceName;
-  end;
+end;
 
 // Get service user name (see 'Scripted Constants' section in docs)
 function GetServiceUserName(Param: string): string;
-  begin
+begin
   result := ArgServiceUserName;
-  end;
+end;
 
 // Does instance have installed service?
 function DoesInstanceHaveService(): boolean;
-  var
-    ServiceName: string;
-  begin
+var
+  ServiceName: string;
+begin
   ServiceName := '';
   result := RegQueryStringValue(HKEY_LOCAL_MACHINE, ExpandConstant('{#RegistryRootPath}\Instances\') + ArgInstance, 'ServiceName', ServiceName) and (Trim(ServiceName) <> '');
-  end;
+end;
 
 // Returns filename of <javahome>\bin\server\jvm.dll if found
 function FindJVM(): string;
-  var
-    FileName: string;
-  begin
+var
+  FileName: string;
+begin
   result := '';
   if IsJavaInstalled() then
     begin
-    FileName := GetJavaHome() + '\bin\server\jvm.dll';
-    if FileExists(FileName) then
-      result := FileName;
+      FileName := GetJavaHome() + '\bin\server\jvm.dll';
+      if FileExists(FileName) then
+        result := FileName;
     end;
-  end;
+end;
 
 // Removes whitespace from a string
 function RemoveWhitespace(S: string): string;
-  var
-    WS: TArrayOfString;
-    I: integer;
-  begin
+var
+  WS: TArrayOfString;
+  I: integer;
+begin
   SetArrayLength(WS, 2);
   WS[0] := #9;
   WS[1] := ' ';
   for I := 0 to GetArrayLength(WS) - 1 do
     StringChangeEx(S, WS[I], '', true);
   result := S;
-  end;
+end;
 
 function InitializeSetup(): boolean;
-  var
-    SWbemLocator: variant;
-  begin
+var
+  SWbemLocator: variant;
+begin
   result := true;
   // Instance name
   ArgInstance := Trim(ExpandConstant('{param:instance|{#DefaultInstance}}'));
   // JVM path (if unspecified, search)
   ArgJVMPath := Trim(ExpandConstant('{param:jvmpath}'));
-  If ArgJVMPath = '' then
+  if ArgJVMPath = '' then
     ArgJVMPath := FindJVM();
   // Service name (if unspecified, default depends on instance name)
   ArgServiceName := Trim(ExpandConstant('{param:servicename}'));
   if ArgServiceName = '' then
     begin
-    if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
-      ArgServiceName := ExpandConstant('{#DefaultServiceName}')
-    else
-      ArgServiceName := ExpandConstant('{#DefaultServiceName}-') + RemoveWhitespace(ArgInstance);
+      if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
+        ArgServiceName := ExpandConstant('{#DefaultServiceName}')
+      else
+        ArgServiceName := ExpandConstant('{#DefaultServiceName}-') + RemoveWhitespace(ArgInstance);
     end;
   // Service display name (if unspecified, default depends on instance name)
   ArgServiceDisplayName := Trim(ExpandConstant('{param:servicedisplayname}'));
   if ArgServiceDisplayName = '' then
     begin
-    if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
-      ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName}')
-    else
-      ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName} - ') + ArgInstance;
+      if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
+        ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName}')
+      else
+        ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName} - ') + ArgInstance;
     end;
   // Service username
   ArgServiceUserName := Trim(ExpandConstant('{param:serviceusername|{#DefaultServiceUserName}}'));
@@ -516,10 +526,10 @@ function InitializeSetup(): boolean;
     WMIService := Null();
   end; //try
   SetArrayLength(RunningServices, 0);
-  end;
+end;
 
 procedure InitializeWizard();
-  begin
+begin
   // Add custom jvm.dll selection page
   JVMPage := CreateInputFilePage(wpSelectTasks, CustomMessage('JVMPageCaption'), CustomMessage('JVMPageDescription'), CustomMessage('JVMPageSubCaption'));
   JVMPage.Add(CustomMessage('JVMPagePathItemCaption'), 'DLL files|*.dll', '');
@@ -541,47 +551,47 @@ procedure InitializeWizard();
   // Add custom progress page
   AppProgressPage := CreateOutputProgressPage(SetupMessage(msgWizardInstalling),
     FmtMessage(CustomMessage('AppProgressPageInstallingCaption'), [ExpandConstant('{#SetupSetting("AppName")}')]));
-  end;
+end;
 
 function ShouldSkipPage(PageID: integer): boolean;
-  begin
+begin
   result := false;
   if PageID = JVMPage.ID then
-    begin
-    // Skip JVM page if service already exists or we are not installing service
-    result := ServiceExists(GetServiceName('')) or (not WizardIsTaskSelected('installservice'));
+      begin
+      // Skip JVM page if service already exists or we are not installing service
+      result := ServiceExists(GetServiceName('')) or (not WizardIsTaskSelected('installservice'));
     end
   else if PageID = ServicePage.ID then
-    begin
-    // Skip service configuration page if not installing service
-    result := not WizardIsTaskSelected('installservice');
+      begin
+      // Skip service configuration page if not installing service
+      result := not WizardIsTaskSelected('installservice');
     end;
-  end;
+end;
 
 function ArrayContainsString(var Arr: TArrayOfString; const Item: string): boolean;
-  var
-    I: integer;
-  begin
+var
+  I: integer;
+begin
   result := false;
   for I := 0 to GetArrayLength(Arr) - 1 do
     begin
-    result := CompareText(Arr[I], Item) = 0;
-    if result then exit;
+      result := CompareText(Arr[I], Item) = 0;
+      if result then exit;
     end;
-  end;
+end;
 
 function GetAppDir(): string;
-  begin
+begin
   result := ExpandConstant('{app}');
-  end;
+end;
 
 // Gets list of running services; returns number running
 function GetRunningServices(AppDir: string; var Services: TServiceList): integer;
-  var
-    WQLQuery: string;
-    SWbemObjectSet, SWbemObject: variant;
-    I: integer;
-  begin
+var
+  WQLQuery: string;
+  SWbemObjectSet, SWbemObject: variant;
+  I: integer;
+begin
   result := 0;
   AppDir := AddBackslash(AppDir);
   StringChangeEx(AppDir, '\', '\\', true);
@@ -591,37 +601,37 @@ function GetRunningServices(AppDir: string; var Services: TServiceList): integer
     SWbemObjectSet := WMIService.ExecQuery(WQLQuery);
     if (not VarIsNull(SWbemObjectSet)) and (SWbemObjectSet.Count > 0) then
       begin
-      SetArrayLength(Services, SWbemObjectSet.Count);
-      for I := 0 to SWbemObjectSet.Count - 1 do
-        begin
-        SWbemObject := SWbemObjectSet.ItemIndex(I);
-        if not VarIsNull(SWbemObject) then
+        SetArrayLength(Services, SWbemObjectSet.Count);
+        for I := 0 to SWbemObjectSet.Count - 1 do
           begin
-          Services[I].ProcessId := SWbemObject.ProcessId;
-          Services[I].Name := SWbemObject.Name;
-          Services[I].DisplayName := SWbemObject.DisplayName;
-          result := result + 1;
-          end
-        else
-          begin
-          Services[I].ProcessId := 0;
-          Services[I].Name := '';
-          Services[I].DisplayName := '';
+            SWbemObject := SWbemObjectSet.ItemIndex(I);
+            if not VarIsNull(SWbemObject) then
+              begin
+                Services[I].ProcessId := SWbemObject.ProcessId;
+                Services[I].Name := SWbemObject.Name;
+                Services[I].DisplayName := SWbemObject.DisplayName;
+                result := result + 1;
+              end
+            else
+              begin
+                Services[I].ProcessId := 0;
+                Services[I].Name := '';
+                Services[I].DisplayName := '';
+              end;
           end;
-        end;
       end;
   except
     SetArrayLength(Services, 0);
   end; //try
-  end;
+end;
 
 // Gets list of running processes; returns number running
 function GetRunningProcesses(AppDir: string; var Processes: TProcessList): integer;
-  var
-    WQLQuery: string;
-    SWbemObjectSet, SWbemObject: variant;
-    I: integer;
-  begin
+var
+  WQLQuery: string;
+  SWbemObjectSet, SWbemObject: variant;
+  I: integer;
+begin
   result := 0;
   AppDir := AddBackslash(AppDir);
   StringChangeEx(AppDir, '\', '\\', true);
@@ -631,38 +641,38 @@ function GetRunningProcesses(AppDir: string; var Processes: TProcessList): integ
     SWbemObjectSet := WMIService.ExecQuery(WQLQuery);
     if (not VarIsNull(SWbemObjectSet)) and (SWbemObjectSet.Count > 0) then
       begin
-      SetArrayLength(Processes, SWbemObjectSet.Count);
-      for I := 0 to SWbemObjectSet.Count - 1 do
-        begin
-        SWbemObject := SWbemObjectSet.ItemIndex(I);
-        if not VarIsNull(SWbemObject) then
+        SetArrayLength(Processes, SWbemObjectSet.Count);
+        for I := 0 to SWbemObjectSet.Count - 1 do
           begin
-          Processes[I].ProcessId := SWbemObject.ProcessId;
-          Processes[I].Name := SWbemObject.Name;
-          Processes[I].ExecutablePath := SWbemObject.ExecutablePath;
-          result := result + 1;
-          end
-        else
-          begin
-          Processes[I].ProcessId := 0;
-          Processes[I].Name := '';
-          Processes[I].ExecutablePath := '';
+            SWbemObject := SWbemObjectSet.ItemIndex(I);
+            if not VarIsNull(SWbemObject) then
+              begin
+                Processes[I].ProcessId := SWbemObject.ProcessId;
+                Processes[I].Name := SWbemObject.Name;
+                Processes[I].ExecutablePath := SWbemObject.ExecutablePath;
+                result := result + 1;
+              end
+            else
+              begin
+                Processes[I].ProcessId := 0;
+                Processes[I].Name := '';
+                Processes[I].ExecutablePath := '';
+              end;
           end;
-        end;
       end;
   except
     SetArrayLength(Processes, 0);
   end; //try
-  end;
+end;
 
 // Builds a newline-delimited list of running services and processes for GUI
 function GetRunningProcessList(AppDir: string): string;
-  var
-    ServiceCount, ProcessCount, I, J, MaxOutput: integer;
-    Services: TServiceList;
-    Processes: TProcessList;
-    Output: TArrayOfString;
-  begin
+var
+  ServiceCount, ProcessCount, I, J, MaxOutput: integer;
+  Services: TServiceList;
+  Processes: TProcessList;
+  Output: TArrayOfString;
+begin
   result := '';
   ServiceCount := GetRunningServices(AppDir, Services);
   ProcessCount := GetRunningProcesses(AppDir, Processes);
@@ -674,14 +684,14 @@ function GetRunningProcessList(AppDir: string): string;
   for I := 0 to ProcessCount - 1 do
     if not ArrayContainsString(Output, Processes[I].Name) then
       begin
-      Output[J] := Processes[I].Name;
-      J := J + 1;
+        Output[J] := Processes[I].Name;
+        J := J + 1;
       end;
   MaxOutput := 20;
   if GetArrayLength(Output) >= MaxOutput then
     begin
-    J := MaxOutput;
-    Output[MaxOutput - 1] := '...';
+      J := MaxOutput;
+      Output[MaxOutput - 1] := '...';
     end
   else
     J := GetArrayLength(Output);
@@ -691,346 +701,344 @@ function GetRunningProcessList(AppDir: string): string;
         result := Output[I]
       else
         result := result + #10 + Output[I];
-  end;
+end;
 
 // Runs 'net stop <servicename>' for each running service; returns true if all
 // services successfully stopped
 function StopRunningServices(AppDir: string): boolean;
-  var
-    Count, I, ResultCode: integer;
-    Services: TServiceList;
-    Command, Parameters: string;
-  begin
+var
+  Count, I, ResultCode: integer;
+  Services: TServiceList;
+  Command, Parameters: string;
+begin
   result := false;
   Count := GetRunningServices(AppDir, Services);
   if Count > 0 then
     begin
-    Command := ExpandConstant('{sys}\net.exe');
-    for I := 0 to Count - 1 do
-      begin
-      Parameters := Format('stop "%s"', [Services[I].Name]);
-      Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
-      Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      end;
-    result := GetRunningServices(AppDir, Services) = 0;
+      Command := ExpandConstant('{sys}\net.exe');
+      for I := 0 to Count - 1 do
+        begin
+          Parameters := Format('stop "%s"', [Services[I].Name]);
+          Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
+          Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        end;
+      result := GetRunningServices(AppDir, Services) = 0;
     end;
-  end;
+end;
 
 // Runs 'taskkill /PID <n> [...] /F' for each running process; returns true if
 // all processes successfully stopped
 function TerminateRunningProcesses(AppDir: string): boolean;
-  var
-    Count, I, ResultCode: integer;
-    Processes: TProcessList;
-    Command, Parameters: string;
-  begin
+var
+  Count, I, ResultCode: integer;
+  Processes: TProcessList;
+  Command, Parameters: string;
+begin
   result := false;
   Count := GetRunningProcesses(AppDir, Processes);
   if Count > 0 then
     begin
-    Command := ExpandConstant('{sys}\taskkill.exe');
-    Parameters := ' ';
-    for I := 0 to Count - 1 do
-      Parameters := Parameters + Format('/PID %d ', [Processes[I].ProcessId]);
-    Parameters := Parameters + '/F';
-    Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
-    Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    result := GetRunningProcesses(AppDir, Processes) = 0;
+      Command := ExpandConstant('{sys}\taskkill.exe');
+      Parameters := ' ';
+      for I := 0 to Count - 1 do
+        Parameters := Parameters + Format('/PID %d ', [Processes[I].ProcessId]);
+      Parameters := Parameters + '/F';
+      Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
+      Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      result := GetRunningProcesses(AppDir, Processes) = 0;
     end;
-  end;
+end;
 
 // Runs 'net start <servicename>' for services that were stopped; returns true
 // if all services were successfully started
 function StartServices(var Services: TServiceList): boolean;
-  var
-    Count, I, NumStarted, ResultCode: integer;
-    Command, Parameters: string;
-  begin
+var
+  Count, I, NumStarted, ResultCode: integer;
+  Command, Parameters: string;
+begin
   result := false;
   Count := GetArrayLength(Services);
   if Count > 0 then
     begin
-    Command := ExpandConstant('{sys}\net.exe');
-    NumStarted := 0;
-    for I := 0 to Count - 1 do
-      begin
-      Parameters := Format('start "%s"', [Services[I].Name]);
-      Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
-      if Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
-        NumStarted := NumStarted + 1;
-      end;
-    result := NumStarted = Count;
+      Command := ExpandConstant('{sys}\net.exe');
+      NumStarted := 0;
+      for I := 0 to Count - 1 do
+        begin
+          Parameters := Format('start "%s"', [Services[I].Name]);
+          Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command,Parameters]));
+          if Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+            NumStarted := NumStarted + 1;
+        end;
+      result := NumStarted = Count;
     end;
-  end;
+end;
 
 function NextButtonClick(CurPageID: integer): boolean;
-  var
-    I, ID, Value, Count: integer;
-    ControlValues: TArrayOfString;
-    Controls: TArrayOfInteger;
-    ProcList: string;
-    Processes: TProcessList;
-  begin
+var
+  I, ID, Value: integer;
+  ControlValues: TArrayOfString;
+  Controls: TArrayOfInteger;
+begin
   result := true;
   if CurPageID = JVMPage.ID then
     begin
-    // Ensure that filename is specified and exists
-    result := Trim(JVMPage.Values[0]) <> '';
-    if not result then
-      begin
-      Log(CustomMessage('ErrorJVMPathEmptyLogMessage'));
-      if not WizardSilent() then
+      // Ensure that filename is specified and exists
+      result := Trim(JVMPage.Values[0]) <> '';
+      if not result then
         begin
-        MsgBox(CustomMessage('ErrorJVMPathEmptyGUIMessage'), mbError, MB_OK);
-        JVMPage.Values[0] := FindJVM();
-        WizardForm.ActiveControl := JVMPage.Edits[0];
-        JVMPage.Edits[0].SelectAll();
+          Log(CustomMessage('ErrorJVMPathEmptyLogMessage'));
+          if not WizardSilent() then
+            begin
+              MsgBox(CustomMessage('ErrorJVMPathEmptyGUIMessage'), mbError, MB_OK);
+              JVMPage.Values[0] := FindJVM();
+              WizardForm.ActiveControl := JVMPage.Edits[0];
+              JVMPage.Edits[0].SelectAll();
+            end;
+          exit;
         end;
-      exit;
-      end;
-    result := FileExists(Trim(JVMPage.Values[0]));
-    if not result then
-      begin
-      Log(FmtMessage(CustomMessage('ErrorJVMPathFileNotFoundLogMessage'), [Trim(JVMPage.Values[0])]));
-      if not WizardSilent() then
+      result := FileExists(Trim(JVMPage.Values[0]));
+      if not result then
         begin
-        MsgBox(CustomMessage('ErrorJVMPathFileNotFoundGUIMessage'), mbError, MB_OK);
-        WizardForm.ActiveControl := JVMPage.Edits[0];
-        JVMPage.Edits[0].SelectAll();
+          Log(FmtMessage(CustomMessage('ErrorJVMPathFileNotFoundLogMessage'), [Trim(JVMPage.Values[0])]));
+          if not WizardSilent() then
+            begin
+              MsgBox(CustomMessage('ErrorJVMPathFileNotFoundGUIMessage'), mbError, MB_OK);
+              WizardForm.ActiveControl := JVMPage.Edits[0];
+              JVMPage.Edits[0].SelectAll();
+            end;
+          exit;
         end;
-      exit;
-      end;
-    // Validate minimum jvm.dll version
-    result := IsJVMVersionOK();
-    if not result then
-      begin
-      Log(FmtMessage(CustomMessage('ErrorJVMOldLogMessage'), [GetJVMVersionString(),ExpandConstant('{#MinJavaVersion}')]));
-      if not WizardSilent() then
+      // Validate minimum jvm.dll version
+      result := IsJVMVersionOK();
+      if not result then
         begin
-        MsgBox(FmtMessage(CustomMessage('ErrorJVMOldGUIMessage'), [GetJVMVersionString(),ExpandConstant('{#MinJavaVersion}')]), mbError, MB_OK);
-        WizardForm.ActiveControl := JVMPage.Edits[0];
-        JVMPage.Edits[0].SelectAll();
+          Log(FmtMessage(CustomMessage('ErrorJVMOldLogMessage'), [GetJVMVersionString(),ExpandConstant('{#MinJavaVersion}')]));
+          if not WizardSilent() then
+            begin
+              MsgBox(FmtMessage(CustomMessage('ErrorJVMOldGUIMessage'), [GetJVMVersionString(),ExpandConstant('{#MinJavaVersion}')]), mbError, MB_OK);
+              WizardForm.ActiveControl := JVMPage.Edits[0];
+              JVMPage.Edits[0].SelectAll();
+            end;
+          exit;
         end;
-      exit;
-      end;
-    ArgJVMPath := Trim(JVMPage.Values[0]);
+      ArgJVMPath := Trim(JVMPage.Values[0]);
     end
   else if CurPageID = ServicePage.ID then
     begin
-    // Specify default values for controls on page
-    SetArrayLength(ControlValues, 6);
-    ControlValues[0] := ArgServiceName;
-    ControlValues[1] := ArgServiceDisplayName;
-    ControlValues[2] := ArgServiceUserName;
-    ControlValues[3] := ArgJVMOptions;
-    ControlValues[4] := ArgJVMMS;
-    ControlValues[5] := ArgJVMMX;
-    // Specify which controls require values
-    SetArrayLength(Controls, 5);
-    Controls[0] := 0;
-    Controls[1] := 1;
-    Controls[2] := 2;
-    Controls[3] := 4;
-    Controls[4] := 5;
-    // Validate controls that require values
-    for I := 0 to GetArrayLength(Controls) - 1 do
-      begin
-      ID := Controls[I];
-      result := Trim(ServicePage.Values[ID]) <> '';
+      // Specify default values for controls on page
+      SetArrayLength(ControlValues, 6);
+      ControlValues[0] := ArgServiceName;
+      ControlValues[1] := ArgServiceDisplayName;
+      ControlValues[2] := ArgServiceUserName;
+      ControlValues[3] := ArgJVMOptions;
+      ControlValues[4] := ArgJVMMS;
+      ControlValues[5] := ArgJVMMX;
+      // Specify which controls require values
+      SetArrayLength(Controls, 5);
+      Controls[0] := 0;
+      Controls[1] := 1;
+      Controls[2] := 2;
+      Controls[3] := 4;
+      Controls[4] := 5;
+      // Validate controls that require values
+      for I := 0 to GetArrayLength(Controls) - 1 do
+        begin
+          ID := Controls[I];
+          result := Trim(ServicePage.Values[ID]) <> '';
+          if not result then
+            begin
+              Log(FmtMessage(CustomMessage('ErrorServiceConfigValueMissingLogMessage'), [ServicePage.PromptLabels[ID].Caption]));
+              if not WizardSilent() then
+                begin
+                  MsgBox(CustomMessage('ErrorServiceConfigValueMissingGUIMessage'), mbError, MB_OK);
+                  ServicePage.Values[ID] := ControlValues[ID];
+                  WizardForm.ActiveControl := ServicePage.Edits[ID];
+                  ServicePage.Edits[ID].SelectAll();
+                end;
+              exit;
+            end;
+        end;
+      // Validate service does not exist
+      ID := Controls[0];
+      result := not ServiceExists(Trim(ServicePage.Values[ID]));
       if not result then
         begin
-        Log(FmtMessage(CustomMessage('ErrorServiceConfigValueMissingLogMessage'), [ServicePage.PromptLabels[ID].Caption]));
-        if not WizardSilent() then
-          begin
-          MsgBox(CustomMessage('ErrorServiceConfigValueMissingGUIMessage'), mbError, MB_OK);
-          ServicePage.Values[ID] := ControlValues[ID];
-          WizardForm.ActiveControl := ServicePage.Edits[ID];
-          ServicePage.Edits[ID].SelectAll();
-          end;
-        exit;
+          Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceAlreadyExistsLogMessage'), [Trim(ServicePage.Values[ID])]));
+          if not WizardSilent() then
+            begin
+              MsgBox(CustomMessage('ErrorServiceConfigServiceAlreadyExistsGUIMessage'), mbError, MB_OK);
+              WizardForm.ActiveControl := ServicePage.Edits[ID];
+              ServicePage.Edits[ID].SelectAll();
+            end;
+          exit;
         end;
-      end;
-    // Validate service does not exist
-    ID := Controls[0];
-    result := not ServiceExists(Trim(ServicePage.Values[ID]));
-    if not result then
-      begin
-      Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceAlreadyExistsLogMessage'), [Trim(ServicePage.Values[ID])]));
-      if not WizardSilent() then
-        begin
-        MsgBox(CustomMessage('ErrorServiceConfigServiceAlreadyExistsGUIMessage'), mbError, MB_OK);
-        WizardForm.ActiveControl := ServicePage.Edits[ID];
-        ServicePage.Edits[ID].SelectAll();
-        end;
-      exit;
-      end;
-    // Validate service name does not contain whitespace
-    ID := Controls[0];
-    result := (Pos(' ', Trim(ServicePage.Values[ID])) = 0) and (Pos(#9, Trim(ServicePage.Values[ID])) = 0);
-    if not result then
-      begin
-      Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceNameLogMessage'), [Trim(ServicePage.Values[ID])]));
-      if not WizardSilent() then
-        begin
-        MsgBox(CustomMessage('ErrorServiceConfigServiceNameGUIMessage'), mbError, MB_OK);
-        WizardForm.ActiveControl := ServicePage.Edits[ID];
-        ServicePage.Edits[ID].SelectAll();
-        end;
-      exit;
-      end;
-    // Specify which controls require non-zero values
-    SetArrayLength(Controls, 2);
-    Controls[0] := 4;
-    Controls[1] := 5;
-    for I := 0 to GetArrayLength(Controls) - 1 do
-      begin
-      ID := Controls[I];
-      Value := StrToIntDef(Trim(ServicePage.Values[ID]), 0);
-      result := Value > 0;
+      // Validate service name does not contain whitespace
+      ID := Controls[0];
+      result := (Pos(' ', Trim(ServicePage.Values[ID])) = 0) and (Pos(#9, Trim(ServicePage.Values[ID])) = 0);
       if not result then
         begin
-        Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceMemoryLogMessage'), [Trim(ServicePage.Values[ID]), ServicePage.PromptLabels[ID].Caption]));
-        if not WizardSilent() then
-          begin
-          MsgBox(CustomMessage('ErrorServiceConfigServiceMemoryGUIMessage'), mbError, MB_OK);
-          ServicePage.Values[ID] := ControlValues[ID];
-          WizardForm.ActiveControl := ServicePage.Edits[ID];
-          ServicePage.Edits[ID].SelectAll();
-          end;
-        exit;
+          Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceNameLogMessage'), [Trim(ServicePage.Values[ID])]));
+          if not WizardSilent() then
+            begin
+              MsgBox(CustomMessage('ErrorServiceConfigServiceNameGUIMessage'), mbError, MB_OK);
+              WizardForm.ActiveControl := ServicePage.Edits[ID];
+              ServicePage.Edits[ID].SelectAll();
+            end;
+          exit;
         end;
-      end;
-    ArgServiceName := Trim(ServicePage.Values[0]);
-    ArgServiceDisplayName := Trim(ServicePage.Values[1]);
-    ArgServiceUserName := Trim(ServicePage.Values[2]);
-    ArgJVMOptions := Trim(ServicePage.Values[3]);
-    ArgJVMMS := Trim(ServicePage.Values[4]);
-    ArgJVMMX := Trim(ServicePage.Values[5]);
-    end
-  else if CurPageID = wpReady then
+      // Specify which controls require non-zero values
+      SetArrayLength(Controls, 2);
+      Controls[0] := 4;
+      Controls[1] := 5;
+      for I := 0 to GetArrayLength(Controls) - 1 do
+        begin
+          ID := Controls[I];
+          Value := StrToIntDef(Trim(ServicePage.Values[ID]), 0);
+          result := Value > 0;
+          if not result then
+            begin
+              Log(FmtMessage(CustomMessage('ErrorServiceConfigServiceMemoryLogMessage'), [Trim(ServicePage.Values[ID]), ServicePage.PromptLabels[ID].Caption]));
+              if not WizardSilent() then
+                begin
+                  MsgBox(CustomMessage('ErrorServiceConfigServiceMemoryGUIMessage'), mbError, MB_OK);
+                  ServicePage.Values[ID] := ControlValues[ID];
+                  WizardForm.ActiveControl := ServicePage.Edits[ID];
+                  ServicePage.Edits[ID].SelectAll();
+                end;
+              exit;
+            end;
+        end;
+      ArgServiceName := Trim(ServicePage.Values[0]);
+      ArgServiceDisplayName := Trim(ServicePage.Values[1]);
+      ArgServiceUserName := Trim(ServicePage.Values[2]);
+      ArgJVMOptions := Trim(ServicePage.Values[3]);
+      ArgJVMMS := Trim(ServicePage.Values[4]);
+      ArgJVMMX := Trim(ServicePage.Values[5]);
+    end;
+end;
+
+function PrepareToInstall(var NeedsRestart: boolean): string;
+var
+  ProcList: string;
+  OK: boolean;
+  Count: integer;
+  Processes: TProcessList;
+begin
+  NeedsRestart := false;
+  result := '';
+  ProcList := GetRunningProcessList(GetAppDir());
+  OK := ProcList = '';
+  if not OK then
     begin
-    ProcList := GetRunningProcessList(GetAppDir());
-    result := ProcList = '';
-    if not result then
-      begin
       Log(CustomMessage('ApplicationsRunningLogMessage'));
       // Don't prompt if command line parameters present
-      result := ParamStrExists('/closeapplications') or ParamStrExists('/forcecloseapplications');
-      if not result then
-        result := SuppressibleTaskDialogMsgBox(CustomMessage('ApplicationsRunningInstructionMessage'),
-          FmtMessage(CustomMessage('ApplicationsRunningTextMessage'),[ProcList]),
+      OK := ParamStrExists('/closeapplications') or ParamStrExists('/forcecloseapplications');
+      if not OK then
+        OK := SuppressibleTaskDialogMsgBox(CustomMessage('ApplicationsRunningInstructionMessage'),
+          FmtMessage(CustomMessage('ApplicationsRunningTextMessage'), [ProcList]),
           mbCriticalError,
           MB_YESNO, [CustomMessage('CloseApplicationsMessage'),CustomMessage('DontCloseApplicationsMessage')],
           0,
           IDNO) = IDYES;
-      if result then
+      if OK then
         begin
-        AppProgressPage.SetText(CustomMessage('AppProgressPageStoppingMessage'), '');
-        AppProgressPage.SetProgress(0, 0);
-        AppProgressPage.Show();
-        try
-          AppProgressPage.SetProgress(1, 3);
-          // Cache running service(s) in global variable for later restart
-          Count := GetRunningServices(GetAppDir(), RunningServices);
-          result := (Count = 0) or (StopRunningServices(GetAppDir()));
-          AppProgressPage.SetProgress(2, 3);
-          if result then
-            begin
-            Count := GetRunningProcesses(GetAppDir(), Processes);
-            result := (Count = 0) or (TerminateRunningProcesses(GetAppDir()));
-            end;
-          AppProgressPage.SetProgress(3, 3);
-          if result then
-            Log(CustomMessage('ClosedApplicationsMessage'))
-          else
-            begin
-            Log(SetupMessage(msgErrorCloseApplications));
-            SuppressibleMsgBox(SetupMessage(msgErrorCloseApplications), mbCriticalError, MB_OK, IDOK);
-            end;
-        finally
-          AppProgressPage.Hide();
-        end; //try
+          AppProgressPage.SetText(CustomMessage('AppProgressPageStoppingMessage'), '');
+          AppProgressPage.SetProgress(0, 0);
+          AppProgressPage.Show();
+          try
+            AppProgressPage.SetProgress(1, 3);
+            // Cache running service(s) in global variable for later restart
+            Count := GetRunningServices(GetAppDir(), RunningServices);
+            OK := (Count = 0) or (StopRunningServices(GetAppDir()));
+            AppProgressPage.SetProgress(2, 3);
+            if OK then
+              begin
+                Count := GetRunningProcesses(GetAppDir(), Processes);
+                OK := (Count = 0) or (TerminateRunningProcesses(GetAppDir()));
+              end;
+            AppProgressPage.SetProgress(3, 3);
+            if OK then
+              Log(CustomMessage('ClosedApplicationsMessage'))
+            else
+              begin
+                Log(SetupMessage(msgErrorCloseApplications));
+                SuppressibleMsgBox(SetupMessage(msgErrorCloseApplications), mbCriticalError, MB_OK, IDOK);
+              end;
+          finally
+            AppProgressPage.Hide();
+          end; //try
         end
       else
-        Log(CustomMessage('ApplicationsStillRunningMessage'));
-      end;
+        result := CustomMessage('ApplicationsStillRunningMessage');
     end;
-  end;
+end;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: string): string;
-  var
-    S: string;
-  begin
+var
+  S: string;
+begin
   S := '';
   if MemoUserInfoInfo <> '' then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + MemoUserInfoInfo;
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + MemoUserInfoInfo;
     end;
   if MemoDirInfo <> '' then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + MemoDirInfo;
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + MemoDirInfo;
     end;
   if MemoTypeInfo <> '' then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + MemoTypeInfo;
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + MemoTypeInfo;
     end;
   if MemoComponentsInfo <> '' then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + MemoComponentsInfo;
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + MemoComponentsInfo;
     end;
   if MemoGroupInfo <> '' then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + MemoGroupInfo;
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + MemoGroupInfo;
     end;
   // Show JVM info if installing service
   if (not ServiceExists(GetServiceName(''))) and (WizardIsTaskSelected('installservice')) then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + CustomMessage('ReadyMemoJVMInfo') + NewLine
-      + Space + CustomMessage('ReadyMemoJVMPath') + ' ' + ArgJVMPath + NewLine
-      + Space + CustomMessage('ReadyMemoJVMVersion') + ' ' + GetJVMVersionString() + NewLine
-      + Space + CustomMessage('ReadyMemoJVMPlatform') + ' ' + GetJVMImageType();
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + CustomMessage('ReadyMemoJVMInfo') + NewLine
+        + Space + CustomMessage('ReadyMemoJVMPath') + ' ' + ArgJVMPath + NewLine
+        + Space + CustomMessage('ReadyMemoJVMVersion') + ' ' + GetJVMVersionString() + NewLine
+        + Space + CustomMessage('ReadyMemoJVMPlatform') + ' ' + GetJVMImageType();
     end;
   if MemoTasksInfo <> '' then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + MemoTasksInfo;
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + MemoTasksInfo;
     end;
   // If installing service, list service configuration information
   if WizardIsTaskSelected('installservice') then
     begin
-    if S <> '' then
-      S := S + NewLine + NewLine;
-    S := S + CustomMessage('ReadyMemoServiceConfigInfo') + NewLine
-      + Space + CustomMessage('ReadyMemoServiceNameInfo') + ' ' + ArgServiceName + NewLine
-      + Space + CustomMessage('ReadyMemoServiceDisplayNameInfo') + ' ' + ArgServiceDisplayName + NewLine
-      + Space + CustomMessage('ReadyMemoServiceUserNameInfo') + ' ' + ArgServiceUserName + NewLine;
-    if ArgJVMOptions <> '' then
-      S := S + Space + CustomMessage('ReadyMemoServiceJVMOptionsInfo') + ' ' + ArgJVMOptions + NewLine;
-    S := S + Space + CustomMessage('ReadyMemoServiceJVMMSInfo') + ' ' + ArgJVMMS + 'MB' + NewLine
-      + Space + CustomMessage('ReadyMemoServiceJVMMXInfo') + ' ' + ArgJVMMX + 'MB';
+      if S <> '' then S := S + NewLine + NewLine;
+      S := S + CustomMessage('ReadyMemoServiceConfigInfo') + NewLine
+        + Space + CustomMessage('ReadyMemoServiceNameInfo') + ' ' + ArgServiceName + NewLine
+        + Space + CustomMessage('ReadyMemoServiceDisplayNameInfo') + ' ' + ArgServiceDisplayName + NewLine
+        + Space + CustomMessage('ReadyMemoServiceUserNameInfo') + ' ' + ArgServiceUserName + NewLine;
+      if ArgJVMOptions <> '' then
+        S := S + Space + CustomMessage('ReadyMemoServiceJVMOptionsInfo') + ' ' + ArgJVMOptions + NewLine;
+      S := S + Space + CustomMessage('ReadyMemoServiceJVMMSInfo') + ' ' + ArgJVMMS + 'MB' + NewLine
+        + Space + CustomMessage('ReadyMemoServiceJVMMXInfo') + ' ' + ArgJVMMX + 'MB';
     end;
   result := S;
-  end;
+end;
 
 procedure InstallService();
-  var
-    Executable, StartupMode, Params, ErrorMessage: string;
-    ResultCode: integer;
-  begin
+var
+  Executable, StartupMode, Params, ErrorMessage: string;
+  ResultCode: integer;
+begin
   Executable := ExpandConstant('{app}\bin\tomcat.exe');
   if WizardIsTaskSelected('installservice/setautostart') then
     StartupMode := 'auto'
@@ -1074,43 +1082,43 @@ procedure InstallService();
   Log(FmtMessage(CustomMessage('ServiceInstallCommandLogMessage'), [Executable, Params]));
   if (not Exec(Executable, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
     begin
-    ErrorMessage := SysErrorMessage(ResultCode);
-    Log(FmtMessage(CustomMessage('ErrorServiceInstallLogMessage'), [ArgServiceName, IntToStr(ResultCode), ErrorMessage]));
-    if not WizardSilent() then
-      MsgBox(FmtMessage(CustomMessage('ErrorServiceInstallGUIMessage'), [IntToStr(ResultCode), ErrorMessage]), mbCriticalError, MB_OK);
+      ErrorMessage := SysErrorMessage(ResultCode);
+      Log(FmtMessage(CustomMessage('ErrorServiceInstallLogMessage'), [ArgServiceName, IntToStr(ResultCode), ErrorMessage]));
+      if not WizardSilent() then
+        MsgBox(FmtMessage(CustomMessage('ErrorServiceInstallGUIMessage'), [IntToStr(ResultCode), ErrorMessage]), mbCriticalError, MB_OK);
     end
   else
     Log(CustomMessage('ServiceInstallCommandSucceededLogMessage'));
-  end;
+end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-  begin
+begin
   if CurStep = ssInstall then
     begin
-    if ArgJVMPath <> '' then
-      begin
-      Log(FmtMessage(CustomMessage('JVMPathLogMessage'), [ArgJVMPath]));
-      Log(FmtMessage(CustomMessage('JVMVersionLogMessage'), [GetJVMVersionString()]));
-      Log(FmtMessage(CustomMessage('JVMImageTypeLogMessage'), [GetJVMImageType()]));
-      end;
+      if ArgJVMPath <> '' then
+        begin
+          Log(FmtMessage(CustomMessage('JVMPathLogMessage'), [ArgJVMPath]));
+          Log(FmtMessage(CustomMessage('JVMVersionLogMessage'), [GetJVMVersionString()]));
+          Log(FmtMessage(CustomMessage('JVMImageTypeLogMessage'), [GetJVMImageType()]));
+        end;
     end
   else if CurStep = ssPostInstall then
     begin
-    if WizardIsTaskSelected('installservice') then
-      InstallService();
-    if GetArrayLength(RunningServices) > 0 then
-      begin
-      AppProgressPage.SetText(CustomMessage('AppProgressPageStartingMessage'), '');
-      AppProgressPage.SetProgress(0, 0);
-      AppProgressPage.Show();
-      try
-        AppProgressPage.SetProgress(1, 2);
-        if StartServices(RunningServices) then
-          Log(CustomMessage('StartedServicesMessage'));
-        AppProgressPage.SetProgress(2, 2);
-      finally
-        AppProgressPage.Hide();
-      end; //try
-      end;
+      if WizardIsTaskSelected('installservice') then
+        InstallService();
+      if GetArrayLength(RunningServices) > 0 then
+        begin
+          AppProgressPage.SetText(CustomMessage('AppProgressPageStartingMessage'), '');
+          AppProgressPage.SetProgress(0, 0);
+          AppProgressPage.Show();
+          try
+            AppProgressPage.SetProgress(1, 2);
+            if StartServices(RunningServices) then
+              Log(CustomMessage('StartedServicesMessage'));
+            AppProgressPage.SetProgress(2, 2);
+          finally
+            AppProgressPage.Hide();
+          end; //try
+        end;
     end;
-  end;
+end;
