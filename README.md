@@ -195,7 +195,7 @@ Apache Tomcat requires a Java Virtual Machine (JVM), so Setup needs to know the 
 
 1. It checks for the presence of the `JAVA_HOME`, `JDK_HOME`, and `JRE_HOME` environment variables (in that order). The value of the environment variable is the Java home directory.
 
-2. If the environment variables noted above are not defined, Setup searches the directories named in the `Path` environment variable for `java.exe`. The Java home directory is the parent directory of the directory where `java.exe` is found. For example, if `C:\Program Files\AdoptOpenJDK\JRE11\bin` is in the path (and `java.exe` is in that directory), the Java home directory is `C:\Program Files\AdoptOpenJDK\JRE11`.
+2. If the environment variables noted above are not defined, Setup searches the directories named in the `Path` environment variable for `java.exe`. The Java home directory is the parent directory of the directory where `java.exe` is found. For example, if `C:\Program Files\Eclipse Foundation\JRE11\bin` is in the path (and `java.exe` is in that directory), the Java home directory is `C:\Program Files\Eclipse Foundation\JRE11`.
 
 3. If `java.exe` is not found in the `Path`, Setup searches in the registry for the home directory of the latest Java version installed.
 
@@ -208,6 +208,10 @@ If you have Java installed but Setup fails to find it, you must specify the path
 Setup installs the 64-bit Apache Tomcat binaries if the `jvm.dll` file is 64-bit; otherwise, it installs the 32-bit Apache Tomcat binaries.
 
 The file version of `jvm.dll` must be at least the minimum version required by the version of Tomcat you are installing. If the `jvm.dll` file version is older than the minimum version required by the version of Tomcat you are installing, Setup will not continue.
+
+If Setup can't find the `jvm.dll` file, you can work around the problem by setting the `JAVA_HOME` environment variable to the Java home directory, and then running Setup again. In recent versions of Windows, you can add an environment variable by running the following command:
+
+    rundll32 sysdm.cpl EditEnvironmentVariables
 
 # Uninstalling Apache Tomcat
 
