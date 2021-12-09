@@ -195,7 +195,7 @@ Apache Tomcat requires a Java Virtual Machine (JVM), so Setup needs to know the 
 
 1. It checks for the presence of the `JAVA_HOME`, `JDK_HOME`, and `JRE_HOME` environment variables (in that order). The value of the environment variable is the Java home directory.
 
-2. If the environment variables noted above are not defined, Setup searches the directories named in the `Path` environment variable for `java.exe`. The Java home directory is the parent directory of the directory where `java.exe` is found. For example, if `C:\Program Files\Eclipse Foundation\JRE11\bin` is in the path (and `java.exe` is in that directory), the Java home directory is `C:\Program Files\Eclipse Foundation\JRE11`.
+2. If the environment variables noted above are not defined, Setup searches the directories named in the `Path` environment variable for `java.exe`. The Java home directory is the parent directory of the directory where `java.exe` is found. For example, if `C:\Program Files\Eclipse Adoptium\JRE11\bin` is in the path (and `java.exe` is in that directory), the Java home directory is `C:\Program Files\Eclipse Adoptium\JRE11`.
 
 3. If `java.exe` is not found in the `Path`, Setup searches in the registry for the home directory of the latest Java version installed.
 

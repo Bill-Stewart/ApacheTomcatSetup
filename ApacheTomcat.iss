@@ -71,6 +71,9 @@
 ;
 ; 9.0.55 (2021-11-15)
 ; * Updated JavaInfo.dll to 1.3.0
+;
+; 9.0.56 (2021-12-09)
+; * Updated JavaInfo.dll to 1.3.1
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
