@@ -23,6 +23,5 @@
 #define RegistryRootPath "SOFTWARE\Apache Software Foundation\Tomcat"
 #define DefaultServiceName "Tomcat"
 #define DefaultServiceDisplayName AppName
-#define DefaultServiceUserName "NT AUTHORITY\LocalService"
 #define DefaultJVMMS "256"
 #define DefaultJVMMX "256"

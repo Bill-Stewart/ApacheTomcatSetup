@@ -74,6 +74,9 @@
 ;
 ; 9.0.56 (2021-12-09)
 ; * Updated JavaInfo.dll to 1.3.1
+;
+; 9.0.59 (2022-03-04)
+; * Fix: Don't hard-code default service user name 'NT AUTHORITY\Local Service'
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
@@ -97,7 +100,7 @@ DefaultDirName={autopf}\{code:GetAppName}
 DefaultGroupName={code:GetAppName}
 DisableReadyMemo=no
 DisableReadyPage=no
-DisableWelcomePage=no
+DisableWelcomePage=yes
 MinVersion=6.1sp1
 OutputBaseFilename={#SetupName}
 OutputDir=.
@@ -407,6 +410,21 @@ begin
     RaiseException('OpenSCManager failed: ' + SysErrorMessage(DLLGetLastError));
 end;
 
+// Use WMI to get localized 'NT AUTHORITY\LOCAL SERVICE' username
+function GetLocalServiceUserName(): string;
+var
+  SWbemLocator, WMIService, SID: Variant;
+begin
+  try
+    SWbemLocator := CreateOleObject('WbemScripting.SWbemLocator');
+    WMIService := SWbemLocator.ConnectServer('', 'root\CIMV2');
+    SID := WMIService.Get('Win32_SID.SID=''S-1-5-19''');
+    result := SID.ReferencedDomainName + '\' + SID.AccountName;
+  except
+    result := 'NT Authority\LocalService';
+  end;
+end;
+
 // Get string representation of jvm.dll image type
 function GetJVMImageType(): string;
 begin
@@ -524,8 +542,11 @@ begin
       ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName} - ') + ArgInstance;
   end;
   // Service username
-  ArgServiceUserName := Trim(ExpandConstant(
-    '{param:serviceusername|{#DefaultServiceUserName}}'));
+  ArgServiceUserName := Trim(ExpandConstant('{param:serviceusername}'));
+  if ArgServiceUserName = '' then
+  begin
+    ArgServiceUserName := GetLocalServiceUserName();
+  end;
   // JVM options
   ArgJVMOptions := Trim(ExpandConstant('{param:jvmoptions}'));
   // Memory settings
