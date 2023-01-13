@@ -96,6 +96,12 @@ RunCommandMessage=Run command: "%1" %2
 ClosedApplicationsMessage=Stopped running service(s) and closed running application(s).
 StartedServicesMessage=Service restart command(s) executed successfully.
 
+; ShouldCopyFile
+ShouldCopyFileInstructionMessage=Keep existing file?
+ShouldCopyFileTextMessage=The following file is different and older:%n%n%1%n%nShould Setup keep the existing file? (If you are not sure, the recommendation is to keep the existing file.)
+ShouldCopyFileYesMessage=&Keep the existing file
+ShouldCopyFileNoMessage=&Overwrite the existing file
+
 ; Application progress page
 AppProgressPageInstallingCaption=Please wait while Setup installs %1 on your computer.
 AppProgressPageStoppingMessage=Stopping applications...

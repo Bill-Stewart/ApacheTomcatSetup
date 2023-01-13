@@ -77,11 +77,17 @@
 ;
 ; 9.0.59 (2022-03-04)
 ; * Fix: Don't hard-code default service user name 'NT AUTHORITY\Local Service'
+;
+; 9.0.71 (2023-01-13)
+; * Improved: Prompt to overwrite files in conf that have different hash and
+;   are older than the files being installed
+; * Updated JavaInfo.dll to 1.4.0
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
 #endif
 
+#define protected
 #include AddBackslash(SourcePath) + "includes.iss"
 
 [Setup]
@@ -171,7 +177,16 @@ Source: "{#RootDir}\bin\tomcat{#AppMajorVersion}w.exe.x86"; DestDir: "{app}\bin"
 ; conf - make backup if task selected
 Source: "{app}\conf\*"; DestDir: "{app}\conf-backup-{code:GetDateString}"; Flags: external createallsubdirs recursesubdirs skipifsourcedoesntexist uninsneveruninstall; Tasks: backupconf
 ; conf
-Source: "{#RootDir}\conf\*"; DestDir: "{app}\conf"; Flags: createallsubdirs recursesubdirs comparetimestamp uninsneveruninstall
+#define FindHandle
+#define FindResult
+#sub ProcessFoundFile
+#define FilePath AddBackslash(RootDir) + "conf\" + FindGetFileName(FindHandle)
+#define FileHash GetSHA1OfFile(FilePath)
+#define FileTime GetFileDateTimeString(FilePath, 'yyyymmddhhnnss', '', '')
+#define FileName ExtractFileName(FilePath)
+Source: "{#FilePath}"; DestDir: "{app}\conf"; Check: ShouldCopyFile('{app}\conf\{#FileName}', '{#FileHash}', '{#FileTime}', true); Flags: uninsneveruninstall
+#endsub
+#for {FindHandle = FindResult = FindFirst(AddBackslash(RootDir) + "conf\*", 0); FindResult; FindResult = FindNext(FindHandle)} ProcessFoundFile
 ; webapps
 Source: "{#RootDir}\webapps\ROOT\*";         DestDir: "{app}\webapps\ROOT";         Flags: createallsubdirs recursesubdirs comparetimestamp; Components: webapps/docs or webapps/manager or webapps/hostmanager or webapps/examples
 Source: "{#RootDir}\webapps\docs\*";         DestDir: "{app}\webapps\docs";         Flags: createallsubdirs recursesubdirs comparetimestamp; Components: webapps/docs
@@ -265,6 +280,16 @@ type
     dwCheckPoint:              DWORD;
     dwWaitHint:                DWORD;
   end;
+  SYSTEMTIME = record
+    wYear:         WORD;
+    wMonth:        WORD;
+    wDayOfWeek:    WORD;
+    wDay:          WORD;
+    wHour:         WORD;
+    wMinute:       WORD;
+    wSecond:       WORD;
+    wMilliseconds: WORD;
+  end;
   TService = record
     ProcessId:   DWORD;
     Name:        string;
@@ -288,8 +313,8 @@ var
   ArgJVMMS, ArgJVMMX: string;
   // Progress page
   AppProgressPage: TOutputProgressWizardPage;
-  // WMI support
-  WMIService: Variant;
+  // ActiveX (OLE automation) objects
+  WMIService, ShouldCopy: Variant;
   // List of running services for restarting
   RunningServices: TServiceList;
 
@@ -302,6 +327,12 @@ function QueryServiceStatus(hService: TSCHandle; out lpServiceStatus: TServiceSt
   external 'QueryServiceStatus@advapi32.dll stdcall';
 function CloseServiceHandle(hSCObject: TSCHandle): BOOL;
   external 'CloseServiceHandle@advapi32.dll stdcall';
+
+// Windows file and system time functions
+function FileTimeToLocalFileTime(FileTime: TFileTime; var LocalFileTime: TFileTime): Boolean;
+  external 'FileTimeToLocalFileTime@kernel32.dll stdcall';
+function FileTimeToSystemTime(FileTime: TFileTime; var SystemTime: SYSTEMTIME): Boolean;
+  external 'FileTimeToSystemTime@kernel32.dll stdcall';
 
 // Use JavaInfo.dll to detect Java installation details
 // Latest version available at https://github.com/Bill-Stewart/JavaInfo
@@ -353,6 +384,30 @@ begin
   SetLength(OutStr, NumChars);
   if DLLGetJavaHome(OutStr, NumChars) > 0 then
     result := OutStr;
+end;
+
+// Get file date/time as string in the format 'yyyymmddhhnnss'
+function GetFileDateTimeString(FileName: string): string;
+var
+  FindRec: TFindRec;
+  LocalFileTime: TFileTime;
+  LocalTime: SYSTEMTIME;
+begin
+  result := '';
+  try
+    if FindFirst(FileName, FindRec) then
+    begin
+      if FileTimeToLocalFileTime(FindRec.LastWriteTime, LocalFileTime) then
+      begin
+        if FileTimeToSystemTime(LocalFileTime, LocalTime) Then
+          result := Format('%4.4d%2.2d%2.2d%2.2d%2.2d%2.2d', [LocalTime.wYear,
+            LocalTime.wMonth,LocalTime.wDay,LocalTime.wHour,LocalTime.wMinute,
+            LocalTime.wSecond]);
+      end;
+    end;
+  finally
+    FindClose(FindRec);
+  end;
 end;
 
 function IsJVM64Bit(): Boolean;
@@ -473,6 +528,79 @@ begin
   result := ArgServiceUserName;
 end;
 
+function GetFileHash(const FileName: string): string;
+begin
+  result := '';
+  try
+    result := GetSHA1OfFile(FileName);
+  finally
+  end;
+end;
+
+// Check function: Verify file copy if different and older
+// Uses global 'Scripting.Dictionary' ActiveX object to cache results because
+// check functions can get called more than once
+function ShouldCopyFile(const FilePath, SourceFileHash, SourceFileTime: string; const OverwriteIfSame: Boolean): Boolean;
+var
+  TargetFilePath, TargetFileHash, TargetFileTime: string;
+begin
+  TargetFilePath := ExpandConstant(FilePath);
+  // Copy if file doesn't exist
+  if not FileExists(TargetFilePath) then
+  begin
+    result := true;
+    exit;
+  end;
+  TargetFileHash := GetFileHash(TargetFilePath);
+  if TargetFileHash = '' then
+  begin
+    result := true;
+    exit;
+  end;
+  // Source and target have same hash: Overwrite if requested
+  if CompareText(SourceFileHash, GetSHA1OfFile(TargetFilePath)) = 0 then
+  begin
+    result := OverwriteIfSame;
+    exit;
+  end;
+  // At this point, we know files are different...
+  TargetFileTime := GetFileDateTimeString(TargetFilePath);
+  if TargetFileTime = '' then
+  begin
+    result := true;
+    exit;
+  end;
+  // Source timestamp <= target: Do not overwrite
+  if CompareText(SourceFileTime, TargetFileTime) <= 0 then
+  begin
+    result := false;
+    exit;
+  end;
+  // At this point, we know source timestamp > target...
+  // Overwrite if /forceoverwritefiles specified
+  if ParamStrExists('/forceoverwritefiles') then
+  begin
+    result := true;
+    exit;
+  end;
+  // Use cached response if available
+  if ShouldCopy.Exists(TargetFilePath) then
+  begin
+    result := ShouldCopy.Item(TargetFilePath);
+    exit;
+  end;
+  // Prompt to keep or overwrite
+  result := SuppressibleTaskDialogMsgBox(CustomMessage('ShouldCopyFileInstructionMessage'),
+    FmtMessage(CustomMessage('ShouldCopyFileTextMessage'), [TargetFilePath]),
+    mbConfirmation,
+    MB_YESNO, [CustomMessage('ShouldCopyFileYesMessage'),
+    CustomMessage('ShouldCopyFileNoMessage')],
+    0,
+    idYes) = IDNO;
+  // Cache response
+  ShouldCopy.Add(TargetFilePath, result);
+end;
+
 // Does instance have installed service?
 function DoesInstanceHaveService(): Boolean;
 var
@@ -560,6 +688,7 @@ begin
     WMIService := Null();
   end; //try
   SetArrayLength(RunningServices, 0);
+  ShouldCopy := CreateOleObject('Scripting.Dictionary');
 end;
 
 procedure InitializeWizard();

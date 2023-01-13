@@ -10,6 +10,7 @@ This [Apache Tomcat](https://tomcat.apache.org/) installer (referred to herein a
 
 - [Background](#background)
 - [Download](#download)
+- [Upgrading from the ASF Installer](#upgrading-from-the-asf-installer)
 - [Reinstalling or Upgrading](#reinstalling-or-upgrading)
 - [Setup Command Line Parameters](#setup-command-line-parameters)
   - [Common Command Line Parameters](#common-command-line-parameters)
@@ -34,7 +35,7 @@ This [Apache Tomcat](https://tomcat.apache.org/) installer (referred to herein a
 
 I wrote this [Inno Setup](https://www.jrsoftware.org/isinfo.php) installer because I needed more functionality than was provided by the Apache Software Foundation (ASF) 32-bit/64-bit Windows service installer, which was built using [NSIS](https://nsis.sourceforge.io/). Specifically:
 
-* The ASF installer doesn't provide an easy way to upgrade a Tomcat installation. Using the ASF installer, an upgrade consists of uninstall, click `No` when it asks if you want to delete all the files (a dangerous question), then install new version using the same options (hopefully you documented your settings). If you installed the service, you will need to reconfigure that as well. If you run the service using a specific account, you will need to specify it again and re-enter the credentials (because the uninstall deleted the service). Java runtime parameters (such as memory sizes, JVM options, etc.) must also be reconfigured.
+* The ASF installer doesn't provide an easy way to upgrade a Tomcat installation. Using the ASF installer, an upgrade consists of uninstall, click `No` when it asks if you want to delete all the files (a dangerous question), then install the new version using the same options (hopefully you documented your settings). If you installed the service, you will need to reconfigure that as well. If you run the service using a specific account, you will need to specify it again and re-enter the credentials (because the uninstall deleted the service). Java runtime parameters (such as memory sizes, JVM options, etc.) must also be reconfigured.
 
 * The [installer-specific documentation](https://tomcat.apache.org/tomcat-9.0-doc/setup.html#Windows) is quite brief, and it doesn't mention some very peculiar command line parsing rules (e.g., the `/D=` command line option must be UPPER CASE and must not be quoted on the command line, even if the target directory name contains whitespace). The configuration options for a silent installation must sit in a text-based configuration file, and some notable Windows service configuration options are missing (service user account, etc.).
 
@@ -48,15 +49,41 @@ You can download the latest version from the Github Releases page:
 
 https://github.com/Bill-Stewart/ApacheTomcatSetup/releases/
 
+# Upgrading from the ASF Installer
+
+Setup does not upgrade Tomcat if it was installed by the Apache Software Foundation **32-bit/64-bit Windows Service Installer** package. To perform an upgrade if Tomcat was installed using the ASF installer, you must perform the following steps:
+
+1. Make a backup of all customized files
+
+2. If the ASF installer installed a Tomcat service:
+
+   a. Document any customized service settings (e.g. memory settings, custom command-line options, etc.)
+
+   b. Stop the service
+
+3. Uninstall it using the standard Windows application management list
+
+4. Install Tomcat using Setup
+
+5. Restore customized files
+
+6. If using the service: Add back any customized service settings
+
+After successfully installing Tomcat using Setup, upgrades no longer require the above steps.
+
 # Reinstalling or Upgrading
 
 Please note the following when using Setup to reinstall or upgrade Apache Tomcat:
 
-* **IMPORTANT:** If a file in Setup is newer than the corresponding file already on disk, Setup assumes the file needs to be upgraded and will overwrite it. Therefore, to prevent accidental overwriting of customized files (e.g., configuration files in the `conf` directory), **the Tomcat administrator must update all customized configuration files** (open and save to update date and time, or use a "touch" utility) _before_ reinstalling or upgrading.
+* If the Windows service is installed, Setup automatically stops the service, upgrades the binaries, and restarts the service. All service installation details are retained when reinstalling or upgrading.
 
 * Obsolete files in the included web applications are not removed when upgrading. It is the Tomcat administrator's responsibility to manually manage the web application files in the `webapps` directory.
 
-* If the Windows service is installed, Setup can automatically stop the service, upgrade the binaries, and restart the service. All service installation details are retained when reinstalling or upgrading.
+* If a file that Setup is installing is both different and has an older timestamp than a file in the `conf` directory, Setup will prompt whether you want to keep or overwrite the file. The `Keep the existing file` option (recommended) is the default if you use the `/suppressmsgboxes` parameter (see [Setup Command Line Parameters](#setup-command-line-parameters)).
+
+  > NOTE: Setup provides this prompt as a safeguard to prevent accidental overwriting of customized configuration files. If you are certain you want to overwrite all files without prompting, specify the `/forceoverwritefiles` parameter (not recommended unless you are **absolutely sure** you want to overwrite all files).
+
+* Setup will not overwrite files in the `conf` directory that have a newer timestamp than the same file(s) it installs. You can prevent overwriting of customized files in the `conf` directory by updating the timestamp of customized files (e.g., open and save or use a "touch" utility) **before** a reinstall or upgrade.
 
 # Setup Command Line Parameters
 
@@ -75,11 +102,13 @@ Please note the following when using Setup to reinstall or upgrade Apache Tomcat
 `/jvmpath="`_location_`"`         | Specifies the path and filename of the `jvm.dll` file. See [Finding the jvm.dll File](#finding-the-jvmdll-file).
 `/silent`                         | Runs Setup silently (i.e., without user interaction). For a fully hands-free installation when upgrading, it is recommended to also specify the `/closeapplications` parameter (see below).
 `/closeapplications`              | Setup should automatically stop running services and applications before installing and restart services after installation. (If you omit this parameter and one or more Tomcat services and/or applications are running, Setup will prompt interactively to close them before continuing.)
+`/suppressmsgboxes`               | Suppresses message boxes and uses a default answer. This parameter is recommended for silent installations.
 `/log="`_filename_`"`             | Logs Setup activity to the specified file. The default is not to create a log file.
+`/forceoverwritefiles`            | Overwrites all files in the `conf` directory that are different and newer without prompting (not recommended).
 
 ## Windows Service Installation Command Line Parameters
 
-The following command line parameters set the default values for the text boxes on the **Select Service Configuration Options** page and are applicable only when installing the Windows service:
+The following command line parameters set the default values for the text boxes on the **Select Service Configuration Options** page and are applicable only when installing the Windows service for the first time:
 
 | Parameter                             | Description
 | ---------                             | -----------
@@ -92,7 +121,7 @@ The following command line parameters set the default values for the text boxes 
 
 If the service user account requires a password, you must enter its password in the service configuration dialog after Setup completes.
 
-> **IMPORTANT** - It is **not recommended** to run the service using an administrative account or the `LocalSystem` account.
+> **IMPORTANT**: It is **not recommended** to run the service using an administrative account or the `LocalSystem` account.
 
 ## Instance Name Defaults
 
@@ -183,7 +212,7 @@ Web applications can start successfully with these minimum permissions.
 
 If the service user account is not found, the permission changes will fail silently. In this case, you will need to grant the permissions manually.
 
-> **IMPORTANT** - You may need to change the permissions on one or more of the directories and/or files to properly secure the Apache Tomcat application. (For example, if you use SSL, you will most likely want to restrict access to the certificate's private key file.)
+> **IMPORTANT**: You may need to change the permissions on one or more of the directories and/or files to properly secure the Apache Tomcat application. (For example, if you use SSL, you will most likely want to restrict access to the certificate's private key file.)
 
 ## Backing Up the `conf` Directory
 
@@ -241,6 +270,7 @@ See the [Inno Setup](https://www.jrsoftware.org/isinfo.php) documentation for mo
     /jvmoptions="-Djavax.net.ssl.trustStoreType=WINDOWS-ROOT"
     /silent
     /closeapplications
+    /suppressmsgboxes
     /log="C:\Users\KenDyer\Documents\ApacheTomcatSetup.log"
 
 (All on one line)

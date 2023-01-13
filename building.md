@@ -4,11 +4,18 @@
 ## Prerequisites
 
 * [7-Zip](https://www.7-zip.org/)
+
 * [Inno Setup](https://www.jrsoftware.org/isinfo.php) version 6 or later
+
+* 32-bit version of [JavaInfo.dll](https://github.com/Bill-Stewart/JavaInfo)
 
 ## Get the Downloads
 
-Download the Apache Tomcat zip files for the appropriate version of Apache Tomcat. For example, the zip files for Apache Tomcat 9.0.56 are `apache-tomcat-9.0.56-windows-x64.zip` and `apache-tomcat-9.0.56-windows-x86.zip`. Copy these zip files into the build directory.
+1. Download the Apache Tomcat zip files for the appropriate version of Apache Tomcat. For example, the zip files for Apache Tomcat 9.0.71 are `apache-tomcat-9.0.71-windows-x64.zip` and `apache-tomcat-9.0.71-windows-x86.zip`.
+
+2. Copy these zip files into the build directory.
+
+3. Copy the 32-bit version of `JavaInfo.dll` into the build directory.
 
 ## Extract the Archives
 
@@ -16,14 +23,14 @@ Run the `Expand-TomcatArchive.ps1` script in the build directory. The script use
 
 ## Update `appinfo.ini`
 
-Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the matching version of Apache Tomcat you want to build. For example, to build version `9.0.56`, the lines in `appinfo.ini` are:
+Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the matching version of Apache Tomcat you want to build. For example, to build version `9.0.71`, the lines in `appinfo.ini` are:
 
     [ApacheTomcat]
     Name=Apache Tomcat
     Publisher=Apache Software Foundation
     Major=9
     Minor=0
-    Patch=56
+    Patch=71
 
     [Java]
     MinVersion=8
@@ -32,9 +39,9 @@ Update the `Major`, `Minor`, and `Patch` lines in `appinfo.ini` file with the ma
     Author=Bill Stewart
     URL=https://github.com/Bill-Stewart/ApacheTomcatSetup
 
-The version number of the setup executable will match the version number of Tomcat being installed, with a trailing ".0" appended. (For example, if the Tomcat version is 9.0.56, the version number of the setup executable will be 9.0.56.0).
+The version number of the setup executable will match the version number of Tomcat being installed, with a trailing ".0" appended. (For example, if the Tomcat version is 9.0.71, the version number of the setup executable will be 9.0.71.0).
 
-The `[Java]` section's `MinVersion` directive specifies the minimum Java version required for the version of Tomcat you are installing as noted in the Tomcat release notes. If the `jvm.dll` file's major version is less than this number, Setup will not continue. For example, if you specify `MinVersion=15` and the `jvm.dll` file is version 11.0.9.1, Setup will inform the user that the Java version (based on the file version resource in the `jvm.dll` file the user selected) is not new enough.
+The `[Java]` section's `MinVersion` directive specifies the minimum Java version required for the version of Tomcat you are installing as noted in the Tomcat release notes. If the `jvm.dll` file's major version is less than this number, Setup will not continue. For example, if you specify `MinVersion=15` and the `jvm.dll` file is version 11.0.17.0, Setup will inform the user that the Java version (based on the file version resource in the `jvm.dll` file the user selected) is not new enough.
 
 ## Compile the Inno Setup Script
 
