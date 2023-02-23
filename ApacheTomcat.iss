@@ -82,6 +82,9 @@
 ; * Improved: Prompt to overwrite files in conf that have different hash and
 ;   are older than the files being installed
 ; * Updated JavaInfo.dll to 1.4.0
+;
+; 9.0.72 (2023-02-23)
+; * Build with Inno Setup 6.2.2.
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
