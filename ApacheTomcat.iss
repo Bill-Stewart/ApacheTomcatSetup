@@ -84,7 +84,12 @@
 ; * Updated JavaInfo.dll to 1.4.0
 ;
 ; 9.0.72 (2023-02-23)
-; * Build with Inno Setup 6.2.2.
+; * Built with Inno Setup 6.2.2
+;
+; 9.0.73 (2023-03-07)
+; * Updated JavaInfo.dll to 1.5.1
+; * Replaced GetJavaHome() with GetJavaJVMPath() for improved JDK jvm.dll
+;   detection
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
@@ -343,8 +348,8 @@ function DLLIsBinary64Bit(FileName: string; var Is64Bit: DWORD): DWORD;
   external 'IsBinary64Bit@files:JavaInfo.dll stdcall setuponly';
 function DLLIsJavaInstalled(): DWORD;
   external 'IsJavaInstalled@files:JavaInfo.dll stdcall setuponly';
-function DLLGetJavaHome(FileName: string; NumChars: DWORD): DWORD;
-  external 'GetJavaHome@files:JavaInfo.dll stdcall setuponly';
+function DLLGetJavaJVMPath(FileName: string; NumChars: DWORD): DWORD;
+  external 'GetJavaJVMPath@files:JavaInfo.dll stdcall setuponly';
 
 // Returns whether a parameter is on command line (not case-sensitive)
 function ParamStrExists(const Param: string): Boolean;
@@ -377,16 +382,19 @@ begin
 end;
 
 // JavaInfo.dll function wrapper
-function GetJavaHome(): string;
+function GetJavaJVMPath(): string;
 var
   NumChars: DWORD;
   OutStr: string;
 begin
   result := '';
-  NumChars := DLLGetJavaHome('', 0);
-  SetLength(OutStr, NumChars);
-  if DLLGetJavaHome(OutStr, NumChars) > 0 then
-    result := OutStr;
+  if IsJavaInstalled() then
+  begin
+    NumChars := DLLGetJavaJVMPath('', 0);
+    SetLength(OutStr, NumChars);
+    if DLLGetJavaJVMPath(OutStr, NumChars) > 0 then
+      result := OutStr;
+  end;
 end;
 
 // Get file date/time as string in the format 'yyyymmddhhnnss'
@@ -615,20 +623,6 @@ begin
     'ServiceName', ServiceName) and (Trim(ServiceName) <> '');
 end;
 
-// Returns filename of <javahome>\bin\server\jvm.dll if found
-function FindJVM(): string;
-var
-  FileName: string;
-begin
-  result := '';
-  if IsJavaInstalled() then
-  begin
-    FileName := GetJavaHome() + '\bin\server\jvm.dll';
-    if FileExists(FileName) then
-      result := FileName;
-  end;
-end;
-
 // Removes whitespace from a string
 function RemoveWhitespace(S: string): string;
 var
@@ -653,7 +647,7 @@ begin
   // JVM path (if unspecified, search)
   ArgJVMPath := Trim(ExpandConstant('{param:jvmpath}'));
   if ArgJVMPath = '' then
-    ArgJVMPath := FindJVM();
+    ArgJVMPath := GetJavaJVMPath();
   // Service name (if unspecified, default depends on instance name)
   ArgServiceName := Trim(ExpandConstant('{param:servicename}'));
   if ArgServiceName = '' then
@@ -961,7 +955,7 @@ begin
       if not WizardSilent() then
       begin
         MsgBox(CustomMessage('ErrorJVMPathEmptyGUIMessage'), mbError, MB_OK);
-        JVMPage.Values[0] := FindJVM();
+        JVMPage.Values[0] := GetJavaJVMPath();
         WizardForm.ActiveControl := JVMPage.Edits[0];
         JVMPage.Edits[0].SelectAll();
       end;

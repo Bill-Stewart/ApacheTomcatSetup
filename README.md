@@ -230,9 +230,9 @@ Apache Tomcat requires a Java Virtual Machine (JVM), so Setup needs to know the 
 
 > NOTE: If you are running on a 64-bit version of Windows, Setup won't search the 32-bit portion of the registry if it finds any 64-bit versions of Java in the registry. This only applies to the registry search; if Setup finds a 32-bit installation of Java in the environment variables or `Path`, it will not search the registry.
 
-If any of the above attempts to find the Java home directory succeed (in the above order), Setup appends `\bin\server\jvm.dll` to the Java home directory and uses the result as the path to the `jvm.dll` file.
+If any of the above attempts to find the Java home directory succeed (in the above order), Setup looks for the `jvm.dll` file in the `\bin\server` and `\jre\bin\server` subdirectories of the Java home directory.
 
-If you have Java installed but Setup fails to find it, you must specify the path to the `jvm.dll` file on the **Select Java Virtual Machine** page or by using the `/jvmpath` command line parameter.
+If you have Java installed but Setup fails to find it or the path to the `jvm.dll` file, you must specify the path to the `jvm.dll` file on the **Select Java Virtual Machine** page or by using the `/jvmpath` command line parameter.
 
 Setup installs the 64-bit Apache Tomcat binaries if the `jvm.dll` file is 64-bit; otherwise, it installs the 32-bit Apache Tomcat binaries.
 
