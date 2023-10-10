@@ -90,6 +90,15 @@
 ; * Updated JavaInfo.dll to 1.5.1
 ; * Replaced GetJavaHome() with GetJavaJVMPath() for improved JDK jvm.dll
 ;   detection
+;
+; 9.0.81 (2023-10-10)
+; * Improved: Changed service stop and start to use procrun executable rather
+;   than "net stop" (to take advantage of procrun's --StopTimeout option): The
+;   service stop will now wait for up to 180 seconds (3 minutes) for the
+;   service to stop gracefully
+; * Updated installer window title to remove duplication of version number
+; * Added version.ini file (makes it easier to see installed Tomcat version at
+;   a glance)
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
@@ -102,6 +111,7 @@
 AllowNoIcons=yes
 AppId={code:GetAppId}
 AppName={code:GetAppName}
+AppVerName={code:GetAppName}
 AppPublisher={#AppPublisher}
 AppReadmeFile={#AppURL}
 AppVersion={#AppFullVersion}
@@ -157,7 +167,14 @@ Name: webapps/hostmanager; Description: "{cm:ComponentsWebAppsHostManagerDescrip
 Name: webapps/examples;    Description: "{cm:ComponentsWebAppsExamplesDescription}";    Types: full custom; Flags: dontinheritcheck
 
 [InstallDelete]
+Type: files; Name: "{app}\version.ini"
 Type: files; Name: "{app}\lib\ecj-*.*.jar"; Components: core
+
+[UninstallDelete]
+Type: files; Name: "{app}\version.ini"
+
+[INI]
+Filename: "{app}\version.ini"; Section: "Version"; Key: "Version"; String: "{#AppFullVersion}"
 
 [Files]
 ; Javainfo.dll
@@ -868,8 +885,8 @@ begin
         result := result + #10 + Output[I];
 end;
 
-// Runs 'net stop <servicename>' for each running service; returns true if all
-// services successfully stopped
+// Runs 'tomcat.exe stop <servicename> --StopTimeout 180' for each running
+// service; returns true if all services successfully stopped
 function StopRunningServices(AppDir: string): Boolean;
 var
   Count, I, ResultCode: Integer;
@@ -880,10 +897,10 @@ begin
   Count := GetRunningServices(AppDir, Services);
   if Count > 0 then
   begin
-    Command := ExpandConstant('{sys}\net.exe');
+    Command := ExpandConstant('{app}\bin\tomcat.exe');
     for I := 0 to Count - 1 do
     begin
-      Parameters := Format('stop "%s"', [Services[I].Name]);
+      Parameters := Format('stop "%s" --StopTimeout 180', [Services[I].Name]);
       Log(FmtMessage(CustomMessage('RunCommandMessage'), [Command, Parameters]));
       Exec(Command, Parameters, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     end;
@@ -914,8 +931,8 @@ begin
   end;
 end;
 
-// Runs 'net start <servicename>' for services that were stopped; returns true
-// if all services were successfully started
+// Runs 'tomcat.exe start <servicename>' for services that were stopped;
+// returns true if all services were successfully started
 function StartServices(var Services: TServiceList): Boolean;
 var
   Count, I, NumStarted, ResultCode: Integer;
@@ -925,7 +942,7 @@ begin
   Count := GetArrayLength(Services);
   if Count > 0 then
   begin
-    Command := ExpandConstant('{sys}\net.exe');
+    Command := ExpandConstant('{app}\bin\tomcat.exe');
     NumStarted := 0;
     for I := 0 to Count - 1 do
     begin
