@@ -1,7 +1,7 @@
 ; Bill Stewart's Apache Tomcat Setup - Inno Setup script include file
 
 #define AppGUID "{41186DB8-7806-459C-BE2D-0A672DA928A1}"
-#define DefaultInstance "Default"
+#define DefaultInstanceName "Default"
 #define AppURL "https://tomcat.apache.org/"
 #define AppName ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "ApacheTomcat", "Name")
 #define AppPublisher ReadIni(AddBackslash(SourcePath) + "appinfo.ini", "ApacheTomcat", "Publisher")

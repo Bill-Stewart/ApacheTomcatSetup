@@ -146,7 +146,7 @@ Setup supports both administrative and non-administrative installation modes:
 
 # Installing Separate Instances
 
-An _instance_ is an independent installation of Apache Tomcat in a separate location. You can use the `/instance` command line parameter to install multiple Apache Tomcat services on the same computer, or if you need to run separate specific versions of Apache Tomcat.
+An _instance_ is an independent installation of Apache Tomcat in a separate location. You can use the `/instancename` command line parameter to install multiple Apache Tomcat services on the same computer, or if you need to run separate specific versions of Apache Tomcat.
 
 If you install multiple instances, each installation is considered as a separate application. Each instance will appear as a separate entry in the installed application list in Windows. Each instance must be upgraded, reinstalled, or uninstalled separately. (That is, a reinstall, upgrade, or uninstall of a specific instance affects only that instance.)
 

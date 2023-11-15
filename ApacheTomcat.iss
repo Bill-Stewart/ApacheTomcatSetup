@@ -99,6 +99,9 @@
 ; * Updated installer window title to remove duplication of version number
 ; * Added version.ini file (makes it easier to see installed Tomcat version at
 ;   a glance)
+;
+; 9.0.83 (2023-11-15)
+; * Support both '/instance' and '/instancename' to install multiple instances
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
@@ -277,7 +280,7 @@ Filename: "{app}\bin\tomcat.exe"; Parameters: """//DS//{code:GetServiceName}"" -
   * Add custom wizard page to customize service install
   * Add custom command line parameters (/jvmpath, etc.)
   * Custom command line parameters populate fields in custom wizard pages
-  * Support multiple installations (/instance parameter)
+  * Support multiple installations (/instancename parameter)
   * Test whether service exists
   * Use JavaInfo.dll to get Java installation details
   * Validate service does not exist before attempting to install it
@@ -334,7 +337,7 @@ var
   // Custom service configuration page
   ServicePage: TInputQueryWizardPage;
   // Command line parameters; these can be updated by custom wizard pages
-  ArgInstance, ArgJVMPath, ArgServiceName, ArgServiceDisplayName, ArgServiceUserName, ArgJVMOptions,
+  ArgInstanceName, ArgJVMPath, ArgServiceName, ArgServiceDisplayName, ArgServiceUserName, ArgJVMOptions,
   ArgJVMMS, ArgJVMMX: string;
   // Progress page
   AppProgressPage: TOutputProgressWizardPage;
@@ -374,9 +377,22 @@ var
   I: Integer;
 begin
   result := false;
-  for I := 1 to ParamCount do
+  for I := 1 to ParamCount() do
   begin
     result := CompareText(Param, ParamStr(I)) = 0;
+    if result then
+      exit;
+  end;
+end;
+
+function ParamStrStartsWith(const Param: string): Boolean;
+var
+  I: Integer;
+begin
+  result := false;
+  for I := 1 to ParamCount() do
+  begin
+    result := Pos(AnsiLowercase(Param), AnsiLowercase(ParamStr(I))) = 1;
     if result then
       exit;
   end;
@@ -520,22 +536,22 @@ end;
 // Get installation instance name (see 'Scripted Constants' section in docs)
 function GetInstanceName(Param: string): string;
 begin
-  result := ArgInstance;
+  result := ArgInstanceName;
 end;
 
 // Get AppId (see 'Scripted Constants' section in docs)
 function GetAppId(Param: string): string;
 begin
-  result := ExpandConstant('{{#AppGUID}-') + ArgInstance;
+  result := ExpandConstant('{{#AppGUID}-') + ArgInstanceName;
 end;
 
 // Get AppName (see 'Scripted Constants' section in docs)
 function GetAppName(Param: string): string;
 begin
-  if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
+  if CompareText(ArgInstanceName, ExpandConstant('{#DefaultInstanceName}')) = 0 then
     result := ExpandConstant('{#AppName}')
   else
-    result := ExpandConstant('{#AppName} - ') + ArgInstance;
+    result := ExpandConstant('{#AppName} - ') + ArgInstanceName;
 end;
 
 // Get string containing date/time (see 'Scripted Constants' section in docs)
@@ -636,7 +652,7 @@ var
 begin
   ServiceName := '';
   result := RegQueryStringValue(HKEY_LOCAL_MACHINE,
-    ExpandConstant('{#RegistryRootPath}\Instances\') + ArgInstance,
+    ExpandConstant('{#RegistryRootPath}\Instances\') + ArgInstanceName,
     'ServiceName', ServiceName) and (Trim(ServiceName) <> '');
 end;
 
@@ -659,8 +675,13 @@ var
   SWbemLocator: Variant;
 begin
   result := true;
-  // Instance name
-  ArgInstance := Trim(ExpandConstant('{param:instance|{#DefaultInstance}}'));
+  // Instance name - support both '/instancename' and '/instance' as parameter
+  if ParamStrStartsWith('/instancename') then
+    ArgInstanceName := Trim(ExpandConstant('{param:instancename|{#DefaultInstanceName}}'))
+  else if ParamStrStartsWith('/instance') then
+    ArgInstanceName := Trim(ExpandConstant('{param:instance|{#DefaultInstanceName}}'))
+  else
+    ArgInstanceName := Trim(ExpandConstant('{#DefaultInstanceName}'));
   // JVM path (if unspecified, search)
   ArgJVMPath := Trim(ExpandConstant('{param:jvmpath}'));
   if ArgJVMPath = '' then
@@ -669,19 +690,19 @@ begin
   ArgServiceName := Trim(ExpandConstant('{param:servicename}'));
   if ArgServiceName = '' then
   begin
-    if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
+    if CompareText(ArgInstanceName, ExpandConstant('{#DefaultInstanceName}')) = 0 then
       ArgServiceName := ExpandConstant('{#DefaultServiceName}')
     else
-      ArgServiceName := ExpandConstant('{#DefaultServiceName}-') + RemoveWhitespace(ArgInstance);
+      ArgServiceName := ExpandConstant('{#DefaultServiceName}-') + RemoveWhitespace(ArgInstanceName);
   end;
   // Service display name (if unspecified, default depends on instance name)
   ArgServiceDisplayName := Trim(ExpandConstant('{param:servicedisplayname}'));
   if ArgServiceDisplayName = '' then
   begin
-    if CompareText(ArgInstance, ExpandConstant('{#DefaultInstance}')) = 0 then
+    if CompareText(ArgInstanceName, ExpandConstant('{#DefaultInstanceName}')) = 0 then
       ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName}')
     else
-      ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName} - ') + ArgInstance;
+      ArgServiceDisplayName := ExpandConstant('{#DefaultServiceDisplayName} - ') + ArgInstanceName;
   end;
   // Service username
   ArgServiceUserName := Trim(ExpandConstant('{param:serviceusername}'));
