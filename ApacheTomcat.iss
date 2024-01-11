@@ -102,6 +102,9 @@
 ;
 ; 9.0.83 (2023-11-15)
 ; * Support both '/instance' and '/instancename' to install multiple instances
+;
+; 9.0.85 (2024-01-11)
+; * Updated JavaInfo.dll to 1.6
 
 #if Ver < EncodeVer(6,0,0,0)
   #error This script requires Inno Setup 6 or later
