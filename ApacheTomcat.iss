@@ -105,9 +105,12 @@
 ;
 ; 9.0.85 (2024-01-11)
 ; * Updated JavaInfo.dll to 1.6
+;
+; 9.0.90 (2024-06-20)
+; * Built with Inno Setup 6.3.1
 
-#if Ver < EncodeVer(6,0,0,0)
-  #error This script requires Inno Setup 6 or later
+#if Ver < EncodeVer(6,3,1,0)
+#error This script requires Inno Setup 6.3.1 or later
 #endif
 
 #define protected
@@ -122,8 +125,7 @@ AppPublisher={#AppPublisher}
 AppReadmeFile={#AppURL}
 AppVersion={#AppFullVersion}
 AppUpdatesURL={#AppUpdatesURL}
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=no
 Compression=lzma2/max
 DefaultDirName={autopf}\{code:GetAppName}
