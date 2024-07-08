@@ -108,6 +108,9 @@
 ;
 ; 9.0.90 (2024-06-20)
 ; * Built with Inno Setup 6.3.1
+;
+; 9.0.91 (2024-07-08)
+; * Built with Inno Setup 6.3.2
 
 #if Ver < EncodeVer(6,3,1,0)
 #error This script requires Inno Setup 6.3.1 or later
